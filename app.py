@@ -6,7 +6,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 # ページ設定
-st.set_page_config(page_title="Hakobite 予約システム", page_icon="🚕", layout="wide")
+st.set_page_config(page_title="ハコビテ 予約システム", page_icon="🚕", layout="wide")
 
 # ---------------------------------------------------------
 # 設定エリア & Secrets読み込み
