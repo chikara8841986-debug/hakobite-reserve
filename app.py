@@ -239,7 +239,7 @@ if 'page' not in st.session_state:
 # ページ1: カレンダー画面
 # ---------------------------------------------------------
 if st.session_state.page == 'calendar':
-    st.markdown("<h1 style='text-align: center;'>Hakobite 予約フォーム</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>ハコビテ 予約フォーム</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #555;'>丸亀・善通寺の介護タクシー＆生活支援</p>", unsafe_allow_html=True)
 
     # 週移動ナビゲーション
