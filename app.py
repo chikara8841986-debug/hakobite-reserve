@@ -22,7 +22,7 @@ except:
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ---------------------------------------------------------
-# CSSスタイル定義（スクロール・案内文対応版）
+# CSSスタイル定義
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -100,24 +100,23 @@ div.stButton > button:hover {
         padding-right: 0.5rem !important;
     }
 
-    /* 2. カレンダー部分（7列ブロック）を強制的に横並び＆スクロール可にする */
+    /* 2. カレンダー部分を強制的に横並び＆スクロール可にする */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) {
         display: flex !important;
         flex-direction: row !important;
         overflow-x: auto !important; /* 横スクロールを許可 */
         flex-wrap: nowrap !important;
         gap: 5px !important;
-        padding-bottom: 10px !important; /* スクロールバー用の余白 */
+        padding-bottom: 10px !important;
     }
 
-    /* 3. 各列（日付カラム）の最小幅を設定 */
-    /* これにより、無理に潰れず、スクロールして見れるようになります */
+    /* 3. 各列の最小幅を設定 */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) > div[data-testid="column"] {
         min-width: 60px !important; /* ボタンが潰れない最低幅 */
         flex: 0 0 auto !important;
     }
 
-    /* 4. ボタンのサイズ調整（少し小さめにして一覧性を高める） */
+    /* 4. ボタンのサイズ調整 */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) button {
         padding: 0 !important;
         font-size: 0.7rem !important;
@@ -272,10 +271,10 @@ if st.session_state.page == 'calendar':
 
     with col_nav2:
         st.markdown(f"<h3 style='text-align: center;'>{week_label_start} ～ {week_label_end} の空き状況</h3>", unsafe_allow_html=True)
-        # 案内文を追加
+        # 案内文（修正済み）
         st.markdown("""
         <div class="mobile-notice">
-        💡 スマートフォンでご覧の方は、表を横にスクロールするか、<br>画面を横向きにすると全日程が見やすくなります。
+        💡 スマートフォンでご覧の方は、画面を横向きにすると全日程が見やすくなります。
         </div>
         """, unsafe_allow_html=True)
 
