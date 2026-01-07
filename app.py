@@ -22,22 +22,39 @@ except:
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ---------------------------------------------------------
-# CSSスタイル定義（ハコビテ仕様）
+# CSSスタイル定義（ハコビテ仕様・文字色強制修正版）
 # ---------------------------------------------------------
 st.markdown("""
 <style>
-/* 全体の背景色：優しいクリーム色 */
+/* 1. 全体の背景色と基本の文字色を強制的に指定 */
 .stApp {
-    background-color: #FFFDF5;
+    background-color: #FFFDF5 !important;
+    color: #333333 !important;
 }
 
-/* ヘッダー：ハコビテグリーン */
-h1, h2, h3, h4 {
+/* 2. あらゆるテキスト要素の色を黒系に強制（ダークモード対策） */
+p, div, label, span {
+    color: #333333;
+}
+
+/* 3. ヘッダー（見出し）はハコビテグリーン */
+h1, h2, h3, h4, h5, h6 {
     color: #006400 !important;
     font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
-/* ボタン全体のスタイル調整 */
+/* 4. 入力項目のラベル（名前、電話番号などの上の文字） */
+.stTextInput > label, .stTextArea > label, .stSelectbox > label, .stRadio > label {
+    color: #006400 !important; /* ここもグリーンに */
+    font-weight: bold;
+}
+
+/* 5. ラジオボタンの選択肢の文字 */
+.stRadio div[role='radiogroup'] label p {
+    color: #333333 !important;
+}
+
+/* 6. ボタン全体のスタイル調整 */
 div.stButton > button {
     width: 100%;
     border-radius: 8px;
@@ -70,7 +87,8 @@ div.stButton > button:disabled {
 .stTextInput > div > div > input, 
 .stTextArea > div > div > textarea, 
 .stSelectbox > div > div > div {
-    background-color: #FFFFFF;
+    background-color: #FFFFFF !important;
+    color: #333333 !important;
 }
 
 /* フォームの必須マーク */
