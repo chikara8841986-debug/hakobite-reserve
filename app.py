@@ -22,11 +22,11 @@ except:
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ---------------------------------------------------------
-# CSSスタイル定義（スマホ絶対横並び版）
+# CSSスタイル定義（スマホ完全フィット・グリッド版）
 # ---------------------------------------------------------
 st.markdown("""
 <style>
-/* 1. 基本設定（背景クリーム、文字ダークグレー） */
+/* 1. 基本設定 */
 .stApp {
     background-color: #FFFDF5 !important;
     color: #333333 !important;
@@ -35,11 +35,11 @@ p, div, label, span, h1, h2, h3, h4, h5, h6 {
     color: #333333;
 }
 h1, h2, h3, h4, h5, h6, .stTextInput > label, .stTextArea > label, .stSelectbox > label, .stRadio > label {
-    color: #006400 !important; /* ハコビテグリーン */
+    color: #006400 !important;
     font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
-/* 2. ボタンのデザイン（通常） */
+/* 2. ボタンデザイン（PC・基本） */
 div.stButton > button {
     width: 100%;
     border-radius: 8px;
@@ -52,22 +52,19 @@ div.stButton > button {
 div.stButton > button:hover {
     background-color: #006400;
     color: white;
-    border-color: #006400;
 }
 
-/* 3. 予約確定ボタン（フォーム送信ボタン）だけ特別扱い */
+/* 3. 予約確定ボタン */
 [data-testid="stForm"] button {
-    background-color: #FF8C00 !important; /* オレンジ */
+    background-color: #FF8C00 !important;
     color: white !important;
     border: none !important;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 [data-testid="stForm"] button:hover {
     background-color: #E07B00 !important;
-    color: white !important;
 }
 
-/* 4. 入力フォームの背景を白く */
+/* 4. 入力フォーム白背景 */
 .stTextInput > div > div > input, 
 .stTextArea > div > div > textarea, 
 .stSelectbox > div > div > div {
@@ -80,53 +77,55 @@ div.stButton > button:hover {
 }
 
 /* =========================================
-   【最重要】スマホでカレンダーを絶対に横並びにする設定
+   【修正版】スマホで画面幅に強制的に収める設定
    ========================================= */
 @media (max-width: 640px) {
-    /* 1. カラムの強制横並び */
-    /* Streamlitのカラムコンテナ(Flexbox)の設定を上書きします */
-    div[data-testid="stHorizontalBlock"] {
-        flex-direction: row !important; /* 強制的に横向き */
-        flex-wrap: nowrap !important;   /* 折り返し禁止 */
-        gap: 2px !important;            /* 隙間を極小に */
-        overflow-x: auto !important;    /* 万が一はみ出たらスクロール */
+    /* アプリ全体の余白を調整して広く使えるようにする */
+    .block-container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        max-width: 100vw !important;
     }
 
-    /* 2. 各カラム（列）の幅設定 */
-    div[data-testid="column"] {
-        width: auto !important;
-        flex: 1 1 0% !important;        /* 均等に縮小・拡大 */
-        min-width: 0 !important;        /* 最小幅制限を解除（これがないと縮まない） */
-        padding: 0 !important;          /* パディング削除 */
-    }
-
-    /* 3. ナビゲーションボタン（前へ・次へ）だけは少し余裕を持たせる */
-    /* ボタンが3つしかない列（ナビゲーション）を特定してスタイルを戻す */
-    div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(3):last-child) {
-        gap: 10px !important;
-    }
-
-    /* 4. ボタン自体のサイズ調整（スマホ用） */
-    div.stButton > button {
-        padding: 4px 0 !important;      /* 上下の余白のみ、左右は0 */
-        font-size: 0.7rem !important;   /* 文字サイズを小さく (約11px) */
-        line-height: 1.1 !important;
-        height: auto !important;
-        min-height: 36px !important;    /* タップしやすい最低限の高さ */
-    }
-    div.stButton > button p {
-        font-size: 0.7rem !important;
-    }
-
-    /* 5. 日付ヘッダーの文字サイズ */
-    .calendar-header {
-        font-size: 0.7rem !important;   /* 小さく */
-        margin-bottom: 2px !important;
-        white-space: nowrap !important; /* 改行禁止 */
+    /* 「7つの列を持つブロック（カレンダー）」をグリッド表示にする */
+    /* これにより、絶対に画面幅からはみ出さなくなります */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) {
+        display: grid !important;
+        grid-template-columns: repeat(7, 1fr) !important; /* 等間隔の7列 */
+        gap: 2px !important; /* 隙間は最小限 */
+        width: 100% !important;
     }
     
-    /* 6. タイトルの文字サイズ調整 */
-    h1 { font-size: 1.6rem !important; }
+    /* グリッド内の各セルの設定 */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) > div[data-testid="column"] {
+        width: auto !important;
+        min-width: 0 !important; /* これ重要：最小幅制限を解除 */
+        flex: none !important;
+    }
+
+    /* スマホ時のボタン超圧縮設定 */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) button {
+        padding: 0 !important;         /* 余白なし */
+        margin: 0 !important;
+        font-size: 0.6rem !important;  /* 文字をかなり小さく */
+        min-height: 28px !important;   /* 高さを抑える */
+        height: auto !important;
+        line-height: 1.2 !important;
+        border-width: 1px !important;  /* 枠線を細く */
+    }
+    
+    /* 日付ヘッダーの圧縮 */
+    .calendar-header {
+        font-size: 0.65rem !important;
+        margin-bottom: 2px !important;
+        letter-spacing: -1px !important; /* 文字間を詰める */
+    }
+    
+    /* ナビゲーションボタン（上部の3列）は普通に表示させるためのリセット */
+    div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(3):last-child) {
+        display: flex !important;
+        gap: 10px !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -222,7 +221,7 @@ def send_confirmation_email(to_email, name, booking_details):
         return False
 
 # ---------------------------------------------------------
-# メイン処理 (状態管理)
+# メイン処理
 # ---------------------------------------------------------
 today = datetime.date.today()
 
@@ -240,8 +239,8 @@ if st.session_state.page == 'calendar':
     st.markdown("<h1 style='text-align: center;'>Hakobite 予約フォーム</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #555;'>丸亀・善通寺の介護タクシー＆生活支援</p>", unsafe_allow_html=True)
 
+    # ナビゲーション
     col_nav1, col_nav2, col_nav3 = st.columns([1, 4, 1])
-    
     max_future_date = today + datetime.timedelta(days=60) 
 
     with col_nav1:
@@ -282,7 +281,7 @@ if st.session_state.page == 'calendar':
         day_str = weekdays_ja[target_date.weekday()]
         
         with col:
-            # スマホ対策用にクラスを付与
+            # スマホ用ヘッダー
             st.markdown(f"<div class='calendar-header' style='text-align:center; font-weight:bold; color:#006400; border-bottom:2px solid #FF8C00; margin-bottom:5px;'>{target_date.month}/{target_date.day}<br>({day_str})</div>", unsafe_allow_html=True)
             
             for time in times:
@@ -304,9 +303,10 @@ if st.session_state.page == 'calendar':
                 btn_key = f"{target_date}_{time}"
                 
                 if is_booked or is_past:
-                    # 予約不可
+                    # ✕ボタン（文字を小さく）
                     st.button("✕", key=f"dis_{btn_key}", disabled=True, use_container_width=True)
                 else:
+                    # 時間ボタン（文字を小さく）
                     label = f"{time.hour}:00"
                     if st.button(label, key=f"btn_{btn_key}", use_container_width=True):
                         st.session_state.selected_slot = datetime.datetime.combine(target_date, time)
