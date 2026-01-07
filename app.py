@@ -22,7 +22,7 @@ except:
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ---------------------------------------------------------
-# CSSスタイル定義（タブデザイン調整）
+# CSSスタイル定義（スクロール・案内文対応版）
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -39,7 +39,7 @@ h1, h2, h3, h4, h5, h6, .stTextInput > label, .stTextArea > label, .stSelectbox 
     font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
-/* 2. ボタンデザイン（時間枠） */
+/* 2. ボタンデザイン（通常） */
 div.stButton > button {
     width: 100%;
     border-radius: 8px;
@@ -48,8 +48,6 @@ div.stButton > button {
     background-color: #E8F5E9; 
     color: #006400; 
     transition: all 0.3s;
-    height: auto !important;
-    min-height: 45px !important; /* スマホでも押しやすい大きさ確保 */
 }
 div.stButton > button:hover {
     background-color: #006400;
@@ -66,21 +64,7 @@ div.stButton > button:hover {
     background-color: #E07B00 !important;
 }
 
-/* 4. タブのスタイル調整 */
-button[data-baseweb="tab"] {
-    font-size: 1rem;
-    font-weight: bold;
-    background-color: white;
-    border-radius: 5px 5px 0 0;
-    margin-right: 2px;
-}
-button[data-baseweb="tab"][aria-selected="true"] {
-    background-color: #E8F5E9 !important;
-    color: #006400 !important;
-    border-bottom: 3px solid #FF8C00 !important;
-}
-
-/* 5. 入力フォーム白背景 */
+/* 4. 入力フォーム白背景 */
 .stTextInput > div > div > input, 
 .stTextArea > div > div > textarea, 
 .stSelectbox > div > div > div {
@@ -90,6 +74,62 @@ button[data-baseweb="tab"][aria-selected="true"] {
 .required-label:after {
     content: " *";
     color: #FF8C00;
+}
+
+/* 5. 案内文のデザイン */
+.mobile-notice {
+    background-color: #E8F5E9;
+    border: 1px solid #006400;
+    color: #006400;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    text-align: center;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+/* =========================================
+   【スマホ対策】横スクロールで快適に見せる設定
+   ========================================= */
+@media (max-width: 640px) {
+    
+    /* 1. アプリ全体の余白調整 */
+    .block-container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+
+    /* 2. カレンダー部分（7列ブロック）を強制的に横並び＆スクロール可にする */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) {
+        display: flex !important;
+        flex-direction: row !important;
+        overflow-x: auto !important; /* 横スクロールを許可 */
+        flex-wrap: nowrap !important;
+        gap: 5px !important;
+        padding-bottom: 10px !important; /* スクロールバー用の余白 */
+    }
+
+    /* 3. 各列（日付カラム）の最小幅を設定 */
+    /* これにより、無理に潰れず、スクロールして見れるようになります */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) > div[data-testid="column"] {
+        min-width: 60px !important; /* ボタンが潰れない最低幅 */
+        flex: 0 0 auto !important;
+    }
+
+    /* 4. ボタンのサイズ調整（少し小さめにして一覧性を高める） */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) button {
+        padding: 0 !important;
+        font-size: 0.7rem !important;
+        height: auto !important;
+        min-height: 35px !important;
+    }
+
+    /* 5. 日付ヘッダー */
+    .calendar-header {
+        font-size: 0.7rem !important;
+        white-space: nowrap !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -232,60 +272,56 @@ if st.session_state.page == 'calendar':
 
     with col_nav2:
         st.markdown(f"<h3 style='text-align: center;'>{week_label_start} ～ {week_label_end} の空き状況</h3>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; font-size: 0.9em; color: #666;'>日付タブを切り替えて時間を選択してください</p>", unsafe_allow_html=True)
+        # 案内文を追加
+        st.markdown("""
+        <div class="mobile-notice">
+        💡 スマートフォンでご覧の方は、表を横にスクロールするか、<br>画面を横向きにすると全日程が見やすくなります。
+        </div>
+        """, unsafe_allow_html=True)
 
     # イベント取得
     existing_events = get_events(week_dates[0], week_dates[-1])
     times = [datetime.time(hour=h, minute=0) for h in range(8, 19)]
     weekdays_ja = ["月", "火", "水", "木", "金", "土", "日"]
 
-    # ==========================================
-    # 【変更点】タブで日付を切り替える方式
-    # ==========================================
-    # 7日分のタブを作成（スマホでも横スクロールできる標準機能）
-    tab_labels = [f"{d.month}/{d.day} ({weekdays_ja[d.weekday()]})" for d in week_dates]
-    tabs = st.tabs(tab_labels)
-
-    for i, tab in enumerate(tabs):
-        with tab:
-            target_date = week_dates[i]
-            day_str = weekdays_ja[target_date.weekday()]
+    # カレンダー本体（7列）
+    cols = st.columns(7)
+    for i, col in enumerate(cols):
+        target_date = week_dates[i]
+        day_str = weekdays_ja[target_date.weekday()]
+        
+        with col:
+            # スマホ用ヘッダー
+            st.markdown(f"<div class='calendar-header' style='text-align:center; font-weight:bold; color:#006400; border-bottom:2px solid #FF8C00; margin-bottom:5px;'>{target_date.month}/{target_date.day}<br>({day_str})</div>", unsafe_allow_html=True)
             
-            st.markdown(f"#### {target_date.month}月{target_date.day}日 ({day_str}) の予約枠")
-            
-            # 1日分の時間枠を表示（PCなら4列、スマホなら2列くらいで表示される）
-            # ここはStreamlitの自動調整に任せるのが一番きれい
-            cols = st.columns(3) # 3列で表示
-            
-            for idx, time in enumerate(times):
-                # 3列で折り返し表示
-                with cols[idx % 3]:
-                    slot_start = datetime.datetime.combine(target_date, time).replace(tzinfo=JST)
-                    slot_end = slot_start + datetime.timedelta(hours=1)
-                    is_past = slot_start < datetime.datetime.now(JST)
-                    
-                    is_booked = False
-                    for event in existing_events:
-                        start_str = event['start'].get('dateTime')
-                        end_str = event['end'].get('dateTime')
-                        if start_str and end_str:
-                            event_start = datetime.datetime.fromisoformat(start_str).astimezone(JST)
-                            event_end = datetime.datetime.fromisoformat(end_str).astimezone(JST)
-                            if event_end > slot_start and event_start < slot_end:
-                                is_booked = True
-                                break
-                    
-                    btn_key = f"{target_date}_{time}"
+            for time in times:
+                slot_start = datetime.datetime.combine(target_date, time).replace(tzinfo=JST)
+                slot_end = slot_start + datetime.timedelta(hours=1)
+                is_past = slot_start < datetime.datetime.now(JST)
+                
+                is_booked = False
+                for event in existing_events:
+                    start_str = event['start'].get('dateTime')
+                    end_str = event['end'].get('dateTime')
+                    if start_str and end_str:
+                        event_start = datetime.datetime.fromisoformat(start_str).astimezone(JST)
+                        event_end = datetime.datetime.fromisoformat(end_str).astimezone(JST)
+                        if event_end > slot_start and event_start < slot_end:
+                            is_booked = True
+                            break
+                
+                btn_key = f"{target_date}_{time}"
+                
+                if is_booked or is_past:
+                    # ✕ボタン
+                    st.button("✕", key=f"dis_{btn_key}", disabled=True, use_container_width=True)
+                else:
+                    # 時間ボタン
                     label = f"{time.hour}:00"
-                    
-                    if is_booked or is_past:
-                        st.button(f"{label} ✕", key=f"dis_{btn_key}", disabled=True, use_container_width=True)
-                    else:
-                        # 予約可能：ハコビテグリーン
-                        if st.button(f"{label} 〇", key=f"btn_{btn_key}", use_container_width=True):
-                            st.session_state.selected_slot = datetime.datetime.combine(target_date, time)
-                            st.session_state.page = 'booking'
-                            st.rerun()
+                    if st.button(label, key=f"btn_{btn_key}", use_container_width=True):
+                        st.session_state.selected_slot = datetime.datetime.combine(target_date, time)
+                        st.session_state.page = 'booking'
+                        st.rerun()
 
 # ---------------------------------------------------------
 # ページ2: 予約詳細入力フォーム
@@ -371,45 +407,3 @@ elif st.session_state.page == 'booking':
             submitted = st.form_submit_button("予約を確定する", use_container_width=True)
             
             if submitted:
-                if not name or not tel or not location_from:
-                    st.error("必須項目（名前、電話番号、お迎え場所）を入力してください。")
-                else:
-                    start_dt = slot.replace(tzinfo=JST)
-                    end_dt = start_dt + datetime.timedelta(hours=1)
-                    
-                    details_text = f"""
-■日時: {date_str}
-■サービス: {service_type}
-■お名前: {name}
-■電話: {tel}
-■場所: {location_from}
-■行先: {location_to}
-■車椅子: {wheelchair}
-■介助: {care_req}
-■同乗: {passengers}
-■本人確認: ご予約者と{'同じ' if is_same_person == 'はい' else '異なる'}
-■備考: {note}
-"""
-                    summary = f"【予約】{name}様 - {service_type}"
-                    
-                    try:
-                        with st.spinner('予約処理中...'):
-                            add_event(summary, start_dt, end_dt, details_text)
-                            
-                            mail_sent_msg = ""
-                            if email:
-                                if send_confirmation_email(email, name, details_text):
-                                    mail_sent_msg = f"\n{email} 宛に確認メールを送信しました。"
-                                else:
-                                    mail_sent_msg = "\n※メール送信に失敗しましたが、予約は完了しています。"
-                            
-                            st.success(f"予約が完了しました！{mail_sent_msg}")
-                            st.balloons()
-                            
-                            if st.button("トップページ（カレンダー）へ戻る"):
-                                st.session_state.selected_slot = None
-                                st.session_state.page = 'calendar'
-                                st.rerun()
-                        
-                    except Exception as e:
-                        st.error(f"システムエラーが発生しました: {e}")
