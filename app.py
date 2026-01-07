@@ -22,7 +22,7 @@ except:
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ---------------------------------------------------------
-# CSSスタイル定義（スマホ横並び強制＆ボタン修正版）
+# CSSスタイル定義（スマホ絶対横並び版）
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -74,49 +74,59 @@ div.stButton > button:hover {
     background-color: #FFFFFF !important;
     color: #333333 !important;
 }
-
-/* 5. フォームの必須マーク */
 .required-label:after {
     content: " *";
     color: #FF8C00;
 }
 
-/* 6. 【最重要】スマホでカレンダーを横並びにする魔法 */
+/* =========================================
+   【最重要】スマホでカレンダーを絶対に横並びにする設定
+   ========================================= */
 @media (max-width: 640px) {
-    /* 「7つの列を持つブロック（＝カレンダー）」を探し出して横並びを強制する */
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) {
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        overflow-x: hidden !important;
-    }
-    
-    /* その中の列（カラム）の設定 */
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) > div[data-testid="column"] {
-        width: auto !important;
-        flex: 1 !important;
-        min-width: 0 !important;
-        padding: 1px !important; /* 隙間を詰める */
+    /* 1. カラムの強制横並び */
+    /* Streamlitのカラムコンテナ(Flexbox)の設定を上書きします */
+    div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important; /* 強制的に横向き */
+        flex-wrap: nowrap !important;   /* 折り返し禁止 */
+        gap: 2px !important;            /* 隙間を極小に */
+        overflow-x: auto !important;    /* 万が一はみ出たらスクロール */
     }
 
-    /* スマホ時のボタン文字サイズ調整 */
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) button {
-        padding: 2px 0 !important; /* 内側の余白を減らす */
-        font-size: 0.7rem !important; /* 文字を小さく(約11px) */
-        height: auto !important;
-        min-height: 30px !important;
+    /* 2. 各カラム（列）の幅設定 */
+    div[data-testid="column"] {
+        width: auto !important;
+        flex: 1 1 0% !important;        /* 均等に縮小・拡大 */
+        min-width: 0 !important;        /* 最小幅制限を解除（これがないと縮まない） */
+        padding: 0 !important;          /* パディング削除 */
     }
-    
-    /* スマホ時の日付ヘッダー文字サイズ */
-    .calendar-header {
-        font-size: 0.7rem !important;
+
+    /* 3. ナビゲーションボタン（前へ・次へ）だけは少し余裕を持たせる */
+    /* ボタンが3つしかない列（ナビゲーション）を特定してスタイルを戻す */
+    div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"]:nth-child(3):last-child) {
+        gap: 10px !important;
+    }
+
+    /* 4. ボタン自体のサイズ調整（スマホ用） */
+    div.stButton > button {
+        padding: 4px 0 !important;      /* 上下の余白のみ、左右は0 */
+        font-size: 0.7rem !important;   /* 文字サイズを小さく (約11px) */
         line-height: 1.1 !important;
+        height: auto !important;
+        min-height: 36px !important;    /* タップしやすい最低限の高さ */
+    }
+    div.stButton > button p {
+        font-size: 0.7rem !important;
+    }
+
+    /* 5. 日付ヘッダーの文字サイズ */
+    .calendar-header {
+        font-size: 0.7rem !important;   /* 小さく */
         margin-bottom: 2px !important;
+        white-space: nowrap !important; /* 改行禁止 */
     }
     
-    /* タイトルの文字サイズ調整 */
-    h1 {
-        font-size: 1.5rem !important;
-    }
+    /* 6. タイトルの文字サイズ調整 */
+    h1 { font-size: 1.6rem !important; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -214,10 +224,8 @@ def send_confirmation_email(to_email, name, booking_details):
 # ---------------------------------------------------------
 # メイン処理 (状態管理)
 # ---------------------------------------------------------
-# 今日の日付
 today = datetime.date.today()
 
-# セッション状態の初期化
 if 'current_date' not in st.session_state:
     st.session_state.current_date = today 
 if 'selected_slot' not in st.session_state:
@@ -232,7 +240,6 @@ if st.session_state.page == 'calendar':
     st.markdown("<h1 style='text-align: center;'>Hakobite 予約フォーム</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #555;'>丸亀・善通寺の介護タクシー＆生活支援</p>", unsafe_allow_html=True)
 
-    # ナビゲーションボタン
     col_nav1, col_nav2, col_nav3 = st.columns([1, 4, 1])
     
     max_future_date = today + datetime.timedelta(days=60) 
@@ -275,7 +282,7 @@ if st.session_state.page == 'calendar':
         day_str = weekdays_ja[target_date.weekday()]
         
         with col:
-            # スマホ対策用にクラスを付与したHTML
+            # スマホ対策用にクラスを付与
             st.markdown(f"<div class='calendar-header' style='text-align:center; font-weight:bold; color:#006400; border-bottom:2px solid #FF8C00; margin-bottom:5px;'>{target_date.month}/{target_date.day}<br>({day_str})</div>", unsafe_allow_html=True)
             
             for time in times:
