@@ -22,7 +22,7 @@ except:
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ---------------------------------------------------------
-# CSSスタイル定義（絶対横並び・強制執行版）
+# CSSスタイル定義（ボタン縮小・完全フィット版）
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -77,52 +77,48 @@ div.stButton > button:hover {
 }
 
 /* =========================================
-   【最終手段】スマホで絶対に横並びにする設定
+   【スマホ対策】ボタンを強制的に小さくして収める
    ========================================= */
 @media (max-width: 640px) {
     
-    /* 1. アプリの余白を限界まで削る */
+    /* 1. 全体の余白を少し詰める */
     .block-container {
-        padding-left: 2px !important;
-        padding-right: 2px !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
     }
 
-    /* 2. すべてのカラム（列）を強制的に横並び（Flex-Row）にする */
-    div[data-testid="stHorizontalBlock"] {
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
+    /* 2. カレンダー部分（7列あるブロック）を強制的にグリッド表示にする */
+    /* これで画面幅100%の中に等間隔で並びます */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) {
+        display: grid !important;
+        grid-template-columns: repeat(7, 1fr) !important;
+        gap: 2px !important;
+        width: 100% !important;
+        overflow-x: hidden !important; /* 横スクロール禁止 */
     }
 
-    /* 3. 各カラムの幅を強制的に縮める（min-width: 0 がキモ） */
-    div[data-testid="column"] {
-        flex: 1 1 0px !important;
+    /* 3. 各列の設定（幅制限を解除） */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) > div[data-testid="column"] {
         min-width: 0 !important;
-        padding: 0 1px !important; /* 隣との隙間を1pxに */
-    }
-
-    /* 4. ただし「前の週・次の週」ボタンの列だけは潰れないようにする */
-    /* （ボタンの中に矢印がある列を特定して幅を確保） */
-    div[data-testid="column"]:has(button:contains("週")) {
-        flex: 0 0 auto !important;
-        min-width: 60px !important;
-    }
-    /* 真ん中のタイトル部分は余ったスペースを使う */
-    div[data-testid="column"]:has(h3) {
+        width: auto !important;
         flex: 1 !important;
+        padding: 0 !important;
     }
 
-    /* 5. ボタンの超圧縮（文字サイズ極小・余白ゼロ） */
-    div.stButton > button {
-        padding: 0 !important;
-        margin: 0 !important;
-        font-size: 10px !important; /* スマホで見える限界サイズ */
-        height: 35px !important;
-        line-height: 1.1 !important;
+    /* 4. 【ここが修正点】ボタンのサイズを極限まで削る */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) button {
+        padding: 0px !important;       /* 余白を完全に削除 */
+        margin: 0px !important;
+        font-size: 0.6rem !important;  /* 文字を約10pxに */
+        min-height: auto !important;
+        height: 32px !important;       /* 高さを指定 */
+        line-height: 32px !important;  /* 文字を上下中央に */
+        border-width: 1px !important;  /* 枠線を細く */
     }
-    
-    /* 6. 日付ヘッダーの圧縮 */
+
+    /* 5. 日付ヘッダーも小さく */
     .calendar-header {
-        font-size: 9px !important;
+        font-size: 0.6rem !important;
         margin-bottom: 2px !important;
         letter-spacing: -1px !important;
     }
