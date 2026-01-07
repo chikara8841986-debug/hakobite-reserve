@@ -22,7 +22,7 @@ except:
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ---------------------------------------------------------
-# CSSスタイル定義（スマホ横並び＆ボタン修正版）
+# CSSスタイル定義（スマホ横並び強制＆ボタン修正版）
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -55,8 +55,7 @@ div.stButton > button:hover {
     border-color: #006400;
 }
 
-/* 3. 【重要】予約確定ボタン（フォーム送信ボタン）だけ特別扱い */
-/* フォームの中にあるボタンを狙い撃ちしてオレンジにします */
+/* 3. 予約確定ボタン（フォーム送信ボタン）だけ特別扱い */
 [data-testid="stForm"] button {
     background-color: #FF8C00 !important; /* オレンジ */
     color: white !important;
@@ -64,7 +63,7 @@ div.stButton > button:hover {
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 [data-testid="stForm"] button:hover {
-    background-color: #E07B00 !important; /* 濃いオレンジ */
+    background-color: #E07B00 !important;
     color: white !important;
 }
 
@@ -84,35 +83,39 @@ div.stButton > button:hover {
 
 /* 6. 【最重要】スマホでカレンダーを横並びにする魔法 */
 @media (max-width: 640px) {
-    /* カラム（列）の強制調整 */
-    div[data-testid="column"] {
-        width: 14.28% !important; /* 100% ÷ 7 = 約14.28% */
-        flex: 0 0 auto !important;
-        min-width: 0 !important; /* 最小幅制限を解除 */
-        padding: 0 1px !important; /* 隣との隙間を極限まで詰める */
+    /* 「7つの列を持つブロック（＝カレンダー）」を探し出して横並びを強制する */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: hidden !important;
     }
     
-    /* ボタンの文字サイズを小さくして収める */
-    div.stButton > button {
-        padding: 0.2rem 0 !important;
-        font-size: 10px !important; /* 文字を小さく */
-        height: auto !important;
-        border-radius: 4px !important;
-        border-width: 1px !important;
-    }
-    
-    /* 日付ヘッダーの文字も小さく */
-    .calendar-header {
-        font-size: 10px !important;
-        margin-bottom: 2px !important;
-        line-height: 1.2 !important;
+    /* その中の列（カラム）の設定 */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) > div[data-testid="column"] {
+        width: auto !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+        padding: 1px !important; /* 隙間を詰める */
     }
 
-    /* カレンダー以外のレイアウト（前へ・次へボタンなど）は通常通りに見せる調整 */
-    /* ナビゲーション部分のカラムだけは少し広めに戻す */
-    div[data-testid="stHorizontalBlock"]:has(button:contains("前の週")) div[data-testid="column"] {
-         width: auto !important;
-         flex: 1 !important;
+    /* スマホ時のボタン文字サイズ調整 */
+    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) button {
+        padding: 2px 0 !important; /* 内側の余白を減らす */
+        font-size: 0.7rem !important; /* 文字を小さく(約11px) */
+        height: auto !important;
+        min-height: 30px !important;
+    }
+    
+    /* スマホ時の日付ヘッダー文字サイズ */
+    .calendar-header {
+        font-size: 0.7rem !important;
+        line-height: 1.1 !important;
+        margin-bottom: 2px !important;
+    }
+    
+    /* タイトルの文字サイズ調整 */
+    h1 {
+        font-size: 1.5rem !important;
     }
 }
 </style>
@@ -229,7 +232,7 @@ if st.session_state.page == 'calendar':
     st.markdown("<h1 style='text-align: center;'>Hakobite 予約フォーム</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #555;'>丸亀・善通寺の介護タクシー＆生活支援</p>", unsafe_allow_html=True)
 
-    # ナビゲーションボタン（ここは横並びを維持せず、よしなに配置させる）
+    # ナビゲーションボタン
     col_nav1, col_nav2, col_nav3 = st.columns([1, 4, 1])
     
     max_future_date = today + datetime.timedelta(days=60) 
@@ -384,7 +387,6 @@ elif st.session_state.page == 'booking':
 
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # 予約確定ボタン（CSSでオレンジに指定済み）
             submitted = st.form_submit_button("予約を確定する", use_container_width=True)
             
             if submitted:
