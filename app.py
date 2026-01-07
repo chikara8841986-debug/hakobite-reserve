@@ -407,3 +407,45 @@ elif st.session_state.page == 'booking':
             submitted = st.form_submit_button("予約を確定する", use_container_width=True)
             
             if submitted:
+                if not name or not tel or not location_from:
+                    st.error("必須項目（名前、電話番号、お迎え場所）を入力してください。")
+                else:
+                    start_dt = slot.replace(tzinfo=JST)
+                    end_dt = start_dt + datetime.timedelta(hours=1)
+                    
+                    details_text = f"""
+■日時: {date_str}
+■サービス: {service_type}
+■お名前: {name}
+■電話: {tel}
+■場所: {location_from}
+■行先: {location_to}
+■車椅子: {wheelchair}
+■介助: {care_req}
+■同乗: {passengers}
+■本人確認: ご予約者と{'同じ' if is_same_person == 'はい' else '異なる'}
+■備考: {note}
+"""
+                    summary = f"【予約】{name}様 - {service_type}"
+                    
+                    try:
+                        with st.spinner('予約処理中...'):
+                            add_event(summary, start_dt, end_dt, details_text)
+                            
+                            mail_sent_msg = ""
+                            if email:
+                                if send_confirmation_email(email, name, details_text):
+                                    mail_sent_msg = f"\n{email} 宛に確認メールを送信しました。"
+                                else:
+                                    mail_sent_msg = "\n※メール送信に失敗しましたが、予約は完了しています。"
+                            
+                            st.success(f"予約が完了しました！{mail_sent_msg}")
+                            st.balloons()
+                            
+                            if st.button("トップページ（カレンダー）へ戻る"):
+                                st.session_state.selected_slot = None
+                                st.session_state.page = 'calendar'
+                                st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"システムエラーが発生しました: {e}")
