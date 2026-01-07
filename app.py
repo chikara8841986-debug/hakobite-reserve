@@ -22,68 +22,53 @@ except:
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ---------------------------------------------------------
-# CSSスタイル定義（ハコビテ仕様・文字色強制修正版）
+# CSSスタイル定義（スマホ横並び＆ボタン修正版）
 # ---------------------------------------------------------
 st.markdown("""
 <style>
-/* 1. 全体の背景色と基本の文字色を強制的に指定 */
+/* 1. 基本設定（背景クリーム、文字ダークグレー） */
 .stApp {
     background-color: #FFFDF5 !important;
     color: #333333 !important;
 }
-
-/* 2. あらゆるテキスト要素の色を黒系に強制（ダークモード対策） */
-p, div, label, span {
+p, div, label, span, h1, h2, h3, h4, h5, h6 {
     color: #333333;
 }
-
-/* 3. ヘッダー（見出し）はハコビテグリーン */
-h1, h2, h3, h4, h5, h6 {
-    color: #006400 !important;
+h1, h2, h3, h4, h5, h6, .stTextInput > label, .stTextArea > label, .stSelectbox > label, .stRadio > label {
+    color: #006400 !important; /* ハコビテグリーン */
     font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
-/* 4. 入力項目のラベル（名前、電話番号などの上の文字） */
-.stTextInput > label, .stTextArea > label, .stSelectbox > label, .stRadio > label {
-    color: #006400 !important; /* ここもグリーンに */
-    font-weight: bold;
-}
-
-/* 5. ラジオボタンの選択肢の文字 */
-.stRadio div[role='radiogroup'] label p {
-    color: #333333 !important;
-}
-
-/* 6. ボタン全体のスタイル調整 */
+/* 2. ボタンのデザイン（通常） */
 div.stButton > button {
     width: 100%;
     border-radius: 8px;
     font-weight: bold;
-    border: none;
-    margin-bottom: 8px;
+    border: 2px solid #006400; 
+    background-color: #E8F5E9; 
+    color: #006400; 
     transition: all 0.3s;
 }
-
-/* 予約可能ボタン（通常時）：ハコビテグリーン枠 */
-div.stButton > button:not(:disabled) {
-    background-color: #E8F5E9; 
-    border: 2px solid #006400; 
-    color: #006400; 
-}
-div.stButton > button:not(:disabled):hover {
+div.stButton > button:hover {
     background-color: #006400;
     color: white;
+    border-color: #006400;
 }
 
-/* 予約済み・不可ボタン */
-div.stButton > button:disabled {
-    background-color: #EEEEEE;
-    color: #AAAAAA;
-    border: 1px solid #CCCCCC;
-    cursor: not-allowed;
+/* 3. 【重要】予約確定ボタン（フォーム送信ボタン）だけ特別扱い */
+/* フォームの中にあるボタンを狙い撃ちしてオレンジにします */
+[data-testid="stForm"] button {
+    background-color: #FF8C00 !important; /* オレンジ */
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+[data-testid="stForm"] button:hover {
+    background-color: #E07B00 !important; /* 濃いオレンジ */
+    color: white !important;
 }
 
-/* 入力フォームの背景を白く */
+/* 4. 入力フォームの背景を白く */
 .stTextInput > div > div > input, 
 .stTextArea > div > div > textarea, 
 .stSelectbox > div > div > div {
@@ -91,10 +76,44 @@ div.stButton > button:disabled {
     color: #333333 !important;
 }
 
-/* フォームの必須マーク */
+/* 5. フォームの必須マーク */
 .required-label:after {
     content: " *";
     color: #FF8C00;
+}
+
+/* 6. 【最重要】スマホでカレンダーを横並びにする魔法 */
+@media (max-width: 640px) {
+    /* カラム（列）の強制調整 */
+    div[data-testid="column"] {
+        width: 14.28% !important; /* 100% ÷ 7 = 約14.28% */
+        flex: 0 0 auto !important;
+        min-width: 0 !important; /* 最小幅制限を解除 */
+        padding: 0 1px !important; /* 隣との隙間を極限まで詰める */
+    }
+    
+    /* ボタンの文字サイズを小さくして収める */
+    div.stButton > button {
+        padding: 0.2rem 0 !important;
+        font-size: 10px !important; /* 文字を小さく */
+        height: auto !important;
+        border-radius: 4px !important;
+        border-width: 1px !important;
+    }
+    
+    /* 日付ヘッダーの文字も小さく */
+    .calendar-header {
+        font-size: 10px !important;
+        margin-bottom: 2px !important;
+        line-height: 1.2 !important;
+    }
+
+    /* カレンダー以外のレイアウト（前へ・次へボタンなど）は通常通りに見せる調整 */
+    /* ナビゲーション部分のカラムだけは少し広めに戻す */
+    div[data-testid="stHorizontalBlock"]:has(button:contains("前の週")) div[data-testid="column"] {
+         width: auto !important;
+         flex: 1 !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -201,7 +220,7 @@ if 'current_date' not in st.session_state:
 if 'selected_slot' not in st.session_state:
     st.session_state.selected_slot = None
 if 'page' not in st.session_state:
-    st.session_state.page = 'calendar'  # 初期ページはカレンダー
+    st.session_state.page = 'calendar'
 
 # ---------------------------------------------------------
 # ページ1: カレンダー画面
@@ -210,13 +229,12 @@ if st.session_state.page == 'calendar':
     st.markdown("<h1 style='text-align: center;'>Hakobite 予約フォーム</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #555;'>丸亀・善通寺の介護タクシー＆生活支援</p>", unsafe_allow_html=True)
 
+    # ナビゲーションボタン（ここは横並びを維持せず、よしなに配置させる）
     col_nav1, col_nav2, col_nav3 = st.columns([1, 4, 1])
     
-    # 表示制限の設定
     max_future_date = today + datetime.timedelta(days=60) 
 
     with col_nav1:
-        # 過去に戻るボタン
         if st.session_state.current_date > today:
             if st.button("← 前の週", use_container_width=True):
                 st.session_state.current_date -= datetime.timedelta(days=7)
@@ -227,7 +245,6 @@ if st.session_state.page == 'calendar':
             st.button("← 前の週", disabled=True, use_container_width=True)
 
     with col_nav3:
-        # 未来に進むボタン
         if st.session_state.current_date < max_future_date:
             if st.button("次の週 →", use_container_width=True):
                 st.session_state.current_date += datetime.timedelta(days=7)
@@ -235,7 +252,6 @@ if st.session_state.page == 'calendar':
         else:
             st.button("次の週 →", disabled=True, use_container_width=True)
 
-    # カレンダー表示
     start_display_date = st.session_state.current_date
     week_dates = [start_display_date + datetime.timedelta(days=i) for i in range(7)]
     week_label_start = start_display_date.strftime('%m/%d')
@@ -243,20 +259,21 @@ if st.session_state.page == 'calendar':
 
     with col_nav2:
         st.markdown(f"<h3 style='text-align: center;'>{week_label_start} ～ {week_label_end} の空き状況</h3>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; font-size: 0.9em; color: #666;'>ご希望の日時のボタンを押してください</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; font-size: 0.8em; color: #666;'>ご希望の日時のボタンを押してください</p>", unsafe_allow_html=True)
 
     existing_events = get_events(week_dates[0], week_dates[-1])
     times = [datetime.time(hour=h, minute=0) for h in range(8, 19)]
     weekdays_ja = ["月", "火", "水", "木", "金", "土", "日"]
 
+    # カレンダー本体
     cols = st.columns(7)
     for i, col in enumerate(cols):
         target_date = week_dates[i]
         day_str = weekdays_ja[target_date.weekday()]
         
         with col:
-            st.markdown(f"<div style='text-align:center; font-weight:bold; color:#006400; border-bottom:2px solid #FF8C00; margin-bottom:5px;'>{target_date.month}/{target_date.day}<br>({day_str})</div>", unsafe_allow_html=True)
-            st.write("") 
+            # スマホ対策用にクラスを付与したHTML
+            st.markdown(f"<div class='calendar-header' style='text-align:center; font-weight:bold; color:#006400; border-bottom:2px solid #FF8C00; margin-bottom:5px;'>{target_date.month}/{target_date.day}<br>({day_str})</div>", unsafe_allow_html=True)
             
             for time in times:
                 slot_start = datetime.datetime.combine(target_date, time).replace(tzinfo=JST)
@@ -277,13 +294,13 @@ if st.session_state.page == 'calendar':
                 btn_key = f"{target_date}_{time}"
                 
                 if is_booked or is_past:
+                    # 予約不可
                     st.button("✕", key=f"dis_{btn_key}", disabled=True, use_container_width=True)
                 else:
                     label = f"{time.hour}:00"
-                    # クリックしたらページ遷移
                     if st.button(label, key=f"btn_{btn_key}", use_container_width=True):
                         st.session_state.selected_slot = datetime.datetime.combine(target_date, time)
-                        st.session_state.page = 'booking' # 画面を切り替える
+                        st.session_state.page = 'booking'
                         st.rerun()
 
 # ---------------------------------------------------------
@@ -291,7 +308,6 @@ if st.session_state.page == 'calendar':
 # ---------------------------------------------------------
 elif st.session_state.page == 'booking':
     
-    # 戻るボタンエリア
     if st.button("← カレンダーに戻る"):
         st.session_state.selected_slot = None
         st.session_state.page = 'calendar'
@@ -367,6 +383,8 @@ elif st.session_state.page == 'booking':
             note = st.text_area("備考・ご要望 (150字まで)", placeholder="何か気になることがあればご自由にどうぞ！", max_chars=150)
 
             st.markdown("<br>", unsafe_allow_html=True)
+            
+            # 予約確定ボタン（CSSでオレンジに指定済み）
             submitted = st.form_submit_button("予約を確定する", use_container_width=True)
             
             if submitted:
