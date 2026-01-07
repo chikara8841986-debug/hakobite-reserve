@@ -22,7 +22,7 @@ except:
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ---------------------------------------------------------
-# CSSスタイル定義（ボタン縮小・完全フィット版）
+# CSSスタイル定義（タブデザイン調整）
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -39,7 +39,7 @@ h1, h2, h3, h4, h5, h6, .stTextInput > label, .stTextArea > label, .stSelectbox 
     font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
-/* 2. ボタンデザイン（PC・基本） */
+/* 2. ボタンデザイン（時間枠） */
 div.stButton > button {
     width: 100%;
     border-radius: 8px;
@@ -48,6 +48,8 @@ div.stButton > button {
     background-color: #E8F5E9; 
     color: #006400; 
     transition: all 0.3s;
+    height: auto !important;
+    min-height: 45px !important; /* スマホでも押しやすい大きさ確保 */
 }
 div.stButton > button:hover {
     background-color: #006400;
@@ -64,7 +66,21 @@ div.stButton > button:hover {
     background-color: #E07B00 !important;
 }
 
-/* 4. 入力フォーム白背景 */
+/* 4. タブのスタイル調整 */
+button[data-baseweb="tab"] {
+    font-size: 1rem;
+    font-weight: bold;
+    background-color: white;
+    border-radius: 5px 5px 0 0;
+    margin-right: 2px;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    background-color: #E8F5E9 !important;
+    color: #006400 !important;
+    border-bottom: 3px solid #FF8C00 !important;
+}
+
+/* 5. 入力フォーム白背景 */
 .stTextInput > div > div > input, 
 .stTextArea > div > div > textarea, 
 .stSelectbox > div > div > div {
@@ -74,54 +90,6 @@ div.stButton > button:hover {
 .required-label:after {
     content: " *";
     color: #FF8C00;
-}
-
-/* =========================================
-   【スマホ対策】ボタンを強制的に小さくして収める
-   ========================================= */
-@media (max-width: 640px) {
-    
-    /* 1. 全体の余白を少し詰める */
-    .block-container {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-    }
-
-    /* 2. カレンダー部分（7列あるブロック）を強制的にグリッド表示にする */
-    /* これで画面幅100%の中に等間隔で並びます */
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) {
-        display: grid !important;
-        grid-template-columns: repeat(7, 1fr) !important;
-        gap: 2px !important;
-        width: 100% !important;
-        overflow-x: hidden !important; /* 横スクロール禁止 */
-    }
-
-    /* 3. 各列の設定（幅制限を解除） */
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) > div[data-testid="column"] {
-        min-width: 0 !important;
-        width: auto !important;
-        flex: 1 !important;
-        padding: 0 !important;
-    }
-
-    /* 4. 【ここが修正点】ボタンのサイズを極限まで削る */
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) button {
-        padding: 0px !important;       /* 余白を完全に削除 */
-        margin: 0px !important;
-        font-size: 0.6rem !important;  /* 文字を約10pxに */
-        min-height: auto !important;
-        height: 32px !important;       /* 高さを指定 */
-        line-height: 32px !important;  /* 文字を上下中央に */
-        border-width: 1px !important;  /* 枠線を細く */
-    }
-
-    /* 5. 日付ヘッダーも小さく */
-    .calendar-header {
-        font-size: 0.6rem !important;
-        margin-bottom: 2px !important;
-        letter-spacing: -1px !important;
-    }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -235,7 +203,7 @@ if st.session_state.page == 'calendar':
     st.markdown("<h1 style='text-align: center;'>Hakobite 予約フォーム</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #555;'>丸亀・善通寺の介護タクシー＆生活支援</p>", unsafe_allow_html=True)
 
-    # ナビゲーション
+    # 週移動ナビゲーション
     col_nav1, col_nav2, col_nav3 = st.columns([1, 4, 1])
     max_future_date = today + datetime.timedelta(days=60) 
 
@@ -264,50 +232,60 @@ if st.session_state.page == 'calendar':
 
     with col_nav2:
         st.markdown(f"<h3 style='text-align: center;'>{week_label_start} ～ {week_label_end} の空き状況</h3>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; font-size: 0.8em; color: #666;'>ご希望の日時のボタンを押してください</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; font-size: 0.9em; color: #666;'>日付タブを切り替えて時間を選択してください</p>", unsafe_allow_html=True)
 
+    # イベント取得
     existing_events = get_events(week_dates[0], week_dates[-1])
     times = [datetime.time(hour=h, minute=0) for h in range(8, 19)]
     weekdays_ja = ["月", "火", "水", "木", "金", "土", "日"]
 
-    # カレンダー本体
-    cols = st.columns(7)
-    for i, col in enumerate(cols):
-        target_date = week_dates[i]
-        day_str = weekdays_ja[target_date.weekday()]
-        
-        with col:
-            # スマホ用ヘッダー
-            st.markdown(f"<div class='calendar-header' style='text-align:center; font-weight:bold; color:#006400; border-bottom:2px solid #FF8C00; margin-bottom:5px;'>{target_date.month}/{target_date.day}<br>({day_str})</div>", unsafe_allow_html=True)
+    # ==========================================
+    # 【変更点】タブで日付を切り替える方式
+    # ==========================================
+    # 7日分のタブを作成（スマホでも横スクロールできる標準機能）
+    tab_labels = [f"{d.month}/{d.day} ({weekdays_ja[d.weekday()]})" for d in week_dates]
+    tabs = st.tabs(tab_labels)
+
+    for i, tab in enumerate(tabs):
+        with tab:
+            target_date = week_dates[i]
+            day_str = weekdays_ja[target_date.weekday()]
             
-            for time in times:
-                slot_start = datetime.datetime.combine(target_date, time).replace(tzinfo=JST)
-                slot_end = slot_start + datetime.timedelta(hours=1)
-                is_past = slot_start < datetime.datetime.now(JST)
-                
-                is_booked = False
-                for event in existing_events:
-                    start_str = event['start'].get('dateTime')
-                    end_str = event['end'].get('dateTime')
-                    if start_str and end_str:
-                        event_start = datetime.datetime.fromisoformat(start_str).astimezone(JST)
-                        event_end = datetime.datetime.fromisoformat(end_str).astimezone(JST)
-                        if event_end > slot_start and event_start < slot_end:
-                            is_booked = True
-                            break
-                
-                btn_key = f"{target_date}_{time}"
-                
-                if is_booked or is_past:
-                    # ✕ボタン
-                    st.button("✕", key=f"dis_{btn_key}", disabled=True, use_container_width=True)
-                else:
-                    # 時間ボタン
+            st.markdown(f"#### {target_date.month}月{target_date.day}日 ({day_str}) の予約枠")
+            
+            # 1日分の時間枠を表示（PCなら4列、スマホなら2列くらいで表示される）
+            # ここはStreamlitの自動調整に任せるのが一番きれい
+            cols = st.columns(3) # 3列で表示
+            
+            for idx, time in enumerate(times):
+                # 3列で折り返し表示
+                with cols[idx % 3]:
+                    slot_start = datetime.datetime.combine(target_date, time).replace(tzinfo=JST)
+                    slot_end = slot_start + datetime.timedelta(hours=1)
+                    is_past = slot_start < datetime.datetime.now(JST)
+                    
+                    is_booked = False
+                    for event in existing_events:
+                        start_str = event['start'].get('dateTime')
+                        end_str = event['end'].get('dateTime')
+                        if start_str and end_str:
+                            event_start = datetime.datetime.fromisoformat(start_str).astimezone(JST)
+                            event_end = datetime.datetime.fromisoformat(end_str).astimezone(JST)
+                            if event_end > slot_start and event_start < slot_end:
+                                is_booked = True
+                                break
+                    
+                    btn_key = f"{target_date}_{time}"
                     label = f"{time.hour}:00"
-                    if st.button(label, key=f"btn_{btn_key}", use_container_width=True):
-                        st.session_state.selected_slot = datetime.datetime.combine(target_date, time)
-                        st.session_state.page = 'booking'
-                        st.rerun()
+                    
+                    if is_booked or is_past:
+                        st.button(f"{label} ✕", key=f"dis_{btn_key}", disabled=True, use_container_width=True)
+                    else:
+                        # 予約可能：ハコビテグリーン
+                        if st.button(f"{label} 〇", key=f"btn_{btn_key}", use_container_width=True):
+                            st.session_state.selected_slot = datetime.datetime.combine(target_date, time)
+                            st.session_state.page = 'booking'
+                            st.rerun()
 
 # ---------------------------------------------------------
 # ページ2: 予約詳細入力フォーム
