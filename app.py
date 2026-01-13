@@ -298,11 +298,14 @@ if st.session_state.page == 'calendar':
     # イベント取得
     existing_events = get_events(week_dates[0], week_dates[-1])
     
-    # 30分刻みの時間リスト (8:00 ～ 18:30)
+    # ---------------------------------------------------------
+    # 【変更点】18:00最終にするためのリスト作成
+    # ---------------------------------------------------------
     times = []
-    for h in range(8, 19): 
+    for h in range(8, 19): # 8時～18時
         times.append(datetime.time(hour=h, minute=0))
-        times.append(datetime.time(hour=h, minute=30))
+        if h < 18: # 18:30は含めない
+            times.append(datetime.time(hour=h, minute=30))
 
     weekdays_ja = ["月", "火", "水", "木", "金", "土", "日"]
 
@@ -346,11 +349,23 @@ if st.session_state.page == 'calendar':
 # ページ2: 予約詳細入力フォーム
 # ---------------------------------------------------------
 elif st.session_state.page == 'booking':
-    # 画面遷移時にトップへスクロールさせるJS
+    # ---------------------------------------------------------
+    # 【変更点】強力なスクロールリセットJS（トップに戻る機能）
+    # ---------------------------------------------------------
     components.html(
         """
             <script>
-                window.parent.document.querySelector('section.main').scrollTo(0, 0);
+                // 複数の要素に対してスクロールトップを試みる強力な書き方
+                var doc = window.parent.document;
+                var targets = [
+                    doc.querySelector('section.main'),
+                    doc.querySelector('div[data-testid="stAppViewContainer"]'),
+                    doc.documentElement,
+                    doc.body
+                ];
+                targets.forEach(function(target) {
+                    if (target) target.scrollTop = 0;
+                });
             </script>
         """,
         height=0
@@ -365,7 +380,6 @@ elif st.session_state.page == 'booking':
         slot = st.session_state.selected_slot
         w_list = ['月', '火', '水', '木', '金', '土', '日']
         
-        # 開始時間を表示
         date_str = f"{slot.year}/{slot.month}/{slot.day} ({w_list[slot.weekday()]}) {slot.hour}:{slot.minute:02d} ～"
 
         st.markdown(
@@ -381,7 +395,7 @@ elif st.session_state.page == 'booking':
         
         with st.form("booking_form"):
             st.markdown("##### 1. ご利用時間（目安）")
-            # 所要時間の選択
+            
             duration_options = {
                 "30分": 30,
                 "1時間": 60,
@@ -394,6 +408,9 @@ elif st.session_state.page == 'booking':
             }
             selected_duration = st.selectbox("ご利用予定時間を選択してください *", list(duration_options.keys()))
             duration_minutes = duration_options[selected_duration]
+            
+            # 【変更点】ご利用時間の注記を追加
+            st.caption("※「介護タクシー」「お手伝い支援」以外のサービスをご利用の場合は、「30分」を選択してください。")
 
             st.markdown("---")
             st.markdown("##### 2. お客様情報")
@@ -447,10 +464,8 @@ elif st.session_state.page == 'booking':
 
             st.markdown("---")
             st.markdown("##### 6. お支払い方法")
-            # ---------------------------------------------------------
-            # 【変更点】掛け払いを追加
-            # ---------------------------------------------------------
-            payment_methods = ["現金", "PayPay", "銀行振込", "請求書払い（法人）", "掛け払い"]
+            # 【変更点】PayPay削除
+            payment_methods = ["現金", "銀行振込", "請求書払い（法人）", "掛け払い"]
             payment = st.radio("お支払い方法を選択してください *", payment_methods)
 
             st.markdown("---")
@@ -465,7 +480,6 @@ elif st.session_state.page == 'booking':
                     st.error("必須項目（名前、電話番号、お迎え場所）を入力してください。")
                 else:
                     start_dt = slot.replace(tzinfo=JST)
-                    # 選択された所要時間で終了時刻を計算
                     end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
                     
                     # 重複チェック（ダブルブッキング防止）
