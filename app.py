@@ -90,6 +90,35 @@ div.stButton > button:hover {
     font-weight: bold;
 }
 
+/* 6. 【修正】ドロップダウン・入力欄のダークモード対策（黒い穴を白くする） */
+/* セレクトボックスの本体 */
+div[data-baseweb="select"] > div {
+    background-color: #FFFFFF !important;
+    color: #333333 !important;
+    border-color: #ccc !important;
+}
+/* 開いた時のメニューリスト全体 */
+div[data-baseweb="popover"],
+div[data-baseweb="menu"],
+div[data-baseweb="popover"] div {
+    background-color: #FFFFFF !important;
+    color: #333333 !important;
+}
+/* 選択肢の文字色 */
+li[role="option"] {
+    color: #333333 !important;
+    background-color: #FFFFFF !important;
+}
+/* 選択中のハイライト色 */
+li[role="option"]:hover, li[role="option"][aria-selected="true"] {
+    background-color: #E8F5E9 !important; /* ハコビテグリーン */
+    color: #006400 !important;
+}
+/* ラジオボタンなどの文字色強制 */
+.stRadio label p {
+    color: #333333 !important;
+}
+
 /* =========================================
    【スマホ対策】横スクロールで快適に見せる設定
    ========================================= */
@@ -319,7 +348,6 @@ if st.session_state.page == 'calendar':
                     st.button("✕", key=f"dis_{btn_key}", disabled=True, use_container_width=True)
                 else:
                     label = f"{time.hour}:{time.minute:02d}"
-                    # コールバック関数を使って画面遷移
                     st.button(label, key=f"btn_{btn_key}", use_container_width=True, on_click=to_booking, args=(datetime.datetime.combine(target_date, time),))
 
 # ---------------------------------------------------------
@@ -360,14 +388,12 @@ elif st.session_state.page == 'booking':
         <br>
         """, unsafe_allow_html=True)
 
-        # コールバックで確実にカレンダーに戻る
         st.button("トップページ（カレンダー）へ戻る", on_click=to_calendar)
 
     # ---------------------------
     # パターンB：入力フォーム画面
     # ---------------------------
     else:
-        # コールバックで確実にカレンダーに戻る
         st.button("← カレンダーに戻る", on_click=to_calendar)
 
         if st.session_state.selected_slot:
