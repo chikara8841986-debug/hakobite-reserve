@@ -12,23 +12,6 @@ import streamlit as st
 
 # 既存のコードの先頭付近、st.set_page_configの後などに以下のコードを追加してください
 
-st.markdown(
-    """
-    <style>
-    /* ラジオボタンの選択時の色を変更 */
-    div[role="radiogroup"] > label > div:first-child {
-        border-color: #009688 !important; /* 緑色 */
-        background-color: #009688 !important; /* 緑色 */
-    }
-
-    /* ラジオボタンの未選択時の枠線の色を変更 */
-    div[role="radiogroup"] > label > div:first-child > div {
-        border-color: #009688 !important; /* 緑色 */
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 # 以下、既存のアプリケーションコードが続きます
 # ...
