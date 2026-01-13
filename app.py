@@ -94,38 +94,28 @@ div.stButton > button:hover {
    【スマホ対策】横スクロールで快適に見せる設定
    ========================================= */
 @media (max-width: 640px) {
-    
-    /* 1. アプリ全体の余白調整 */
     .block-container {
         padding-left: 0.5rem !important;
         padding-right: 0.5rem !important;
     }
-
-    /* 2. カレンダー部分を強制的に横並び＆スクロール可にする */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) {
         display: flex !important;
         flex-direction: row !important;
-        overflow-x: auto !important; /* 横スクロールを許可 */
+        overflow-x: auto !important;
         flex-wrap: nowrap !important;
         gap: 5px !important;
         padding-bottom: 10px !important;
     }
-
-    /* 3. 各列の最小幅を設定 */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) > div[data-testid="column"] {
         min-width: 60px !important;
         flex: 0 0 auto !important;
     }
-
-    /* 4. ボタンのサイズ調整 */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) button {
         padding: 0 !important;
         font-size: 0.7rem !important;
         height: auto !important;
         min-height: 35px !important;
     }
-
-    /* 5. 日付ヘッダー */
     .calendar-header {
         font-size: 0.7rem !important;
         white-space: nowrap !important;
@@ -149,19 +139,30 @@ else:
     st.stop()
 
 # ---------------------------------------------------------
-# 関数定義
+# 関数定義（状態変更用）
+# ---------------------------------------------------------
+def to_calendar():
+    """カレンダー画面に戻る"""
+    st.session_state.selected_slot = None
+    st.session_state.booking_success = False
+    st.session_state.page = 'calendar'
+
+def to_booking(target_dt):
+    """予約画面へ進む"""
+    st.session_state.selected_slot = target_dt
+    st.session_state.page = 'booking'
+    st.session_state.booking_success = False
+
+# ---------------------------------------------------------
+# 関数定義（API関連）
 # ---------------------------------------------------------
 def get_events(start_date, end_date):
-    """指定期間のイベントを取得"""
     t_min = datetime.datetime.combine(start_date, datetime.time.min).replace(tzinfo=JST).isoformat()
     t_max = datetime.datetime.combine(end_date, datetime.time.max).replace(tzinfo=JST).isoformat()
     try:
         events_result = service.events().list(
-            calendarId=CALENDAR_ID,
-            timeMin=t_min,
-            timeMax=t_max,
-            singleEvents=True,
-            orderBy='startTime'
+            calendarId=CALENDAR_ID, timeMin=t_min, timeMax=t_max,
+            singleEvents=True, orderBy='startTime'
         ).execute()
         return events_result.get('items', [])
     except Exception as e:
@@ -169,49 +170,31 @@ def get_events(start_date, end_date):
         return []
 
 def check_conflict(start_dt, end_dt):
-    """指定された時間帯に予約が被っていないかチェックする"""
     try:
         events_result = service.events().list(
-            calendarId=CALENDAR_ID,
-            timeMin=start_dt.isoformat(),
-            timeMax=end_dt.isoformat(),
-            singleEvents=True,
-            orderBy='startTime'
+            calendarId=CALENDAR_ID, timeMin=start_dt.isoformat(), timeMax=end_dt.isoformat(),
+            singleEvents=True, orderBy='startTime'
         ).execute()
         items = events_result.get('items', [])
-        return len(items) > 0 # 重複があればTrueを返す
+        return len(items) > 0 
     except Exception as e:
         st.error(f"重複チェックエラー: {e}")
-        return True # エラーの場合は安全のため予約不可とする
+        return True
 
 def add_event(summary, start_dt, end_dt, description=""):
-    """Googleカレンダーにイベントを追加"""
     event = {
         'summary': summary,
         'description': description,
-        'start': {
-            'dateTime': start_dt.isoformat(),
-            'timeZone': 'Asia/Tokyo',
-        },
-        'end': {
-            'dateTime': end_dt.isoformat(),
-            'timeZone': 'Asia/Tokyo',
-        },
+        'start': {'dateTime': start_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
+        'end': {'dateTime': end_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
     }
     service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
 
 def send_confirmation_email(to_email, name, booking_details):
-    """予約完了メールを送信する"""
-    if "email" not in st.secrets:
-        return False
-
+    if "email" not in st.secrets: return False
     sender_email = st.secrets["email"]["sender_address"] 
     sender_password = st.secrets["email"]["sender_password"]
-
-    # 【修正】件名をハコビテに変更
     subject = "【ハコビテ】ご予約ありがとうございます"
-    
-    # 【修正】本文内の表記もハコビテに変更
     body = f"""
 {name} 様
 
@@ -231,7 +214,6 @@ def send_confirmation_email(to_email, name, booking_details):
     msg["Subject"] = subject
     msg["From"] = sender_email
     msg["To"] = to_email
-
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
@@ -264,7 +246,6 @@ if st.session_state.page == 'calendar':
     st.markdown("<h1 style='text-align: center;'>ハコビテ 予約フォーム</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #555;'>丸亀・善通寺の介護タクシー＆生活支援</p>", unsafe_allow_html=True)
 
-    # 週移動ナビゲーション
     col_nav1, col_nav2, col_nav3 = st.columns([1, 4, 1])
     max_future_date = today + datetime.timedelta(days=60) 
 
@@ -293,27 +274,22 @@ if st.session_state.page == 'calendar':
 
     with col_nav2:
         st.markdown(f"<h3 style='text-align: center;'>{week_label_start} ～ {week_label_end} の空き状況</h3>", unsafe_allow_html=True)
-        # 案内文
         st.markdown("""
         <div class="mobile-notice">
         💡 スマートフォンでご覧の方は、画面を横向きにすると全日程が見やすくなります。
         </div>
         """, unsafe_allow_html=True)
 
-    # イベント取得
     existing_events = get_events(week_dates[0], week_dates[-1])
-    
-    # 30分刻みの時間リスト (8:00 ～ 18:00)
     times = []
     for h in range(8, 19): 
         times.append(datetime.time(hour=h, minute=0))
-        if h < 18: # 18:30は含めない
+        if h < 18:
             times.append(datetime.time(hour=h, minute=30))
 
     weekdays_ja = ["月", "火", "水", "木", "金", "土", "日"]
-
-    # カレンダー本体
     cols = st.columns(7)
+    
     for i, col in enumerate(cols):
         target_date = week_dates[i]
         day_str = weekdays_ja[target_date.weekday()]
@@ -343,30 +319,26 @@ if st.session_state.page == 'calendar':
                     st.button("✕", key=f"dis_{btn_key}", disabled=True, use_container_width=True)
                 else:
                     label = f"{time.hour}:{time.minute:02d}"
-                    if st.button(label, key=f"btn_{btn_key}", use_container_width=True):
-                        st.session_state.selected_slot = datetime.datetime.combine(target_date, time)
-                        st.session_state.page = 'booking'
-                        st.session_state.booking_success = False 
-                        st.rerun()
+                    # コールバック関数を使って画面遷移
+                    st.button(label, key=f"btn_{btn_key}", use_container_width=True, on_click=to_booking, args=(datetime.datetime.combine(target_date, time),))
 
 # ---------------------------------------------------------
 # ページ2: 予約詳細入力フォーム（または完了画面）
 # ---------------------------------------------------------
 elif st.session_state.page == 'booking':
-    # 強力なスクロールリセットJS
+    # 【強力なスクロールリセットJS】
     components.html(
         """
             <script>
-                var doc = window.parent.document;
-                var targets = [
-                    doc.querySelector('section.main'),
-                    doc.querySelector('div[data-testid="stAppViewContainer"]'),
-                    doc.documentElement,
-                    doc.body
-                ];
-                targets.forEach(function(target) {
-                    if (target) target.scrollTop = 0;
-                });
+                // 強制的にトップへスクロールさせる処理
+                try {
+                    window.parent.scrollTo(0, 0);
+                    var doc = window.parent.document;
+                    var elements = doc.querySelectorAll('section.main, div[data-testid="stAppViewContainer"], body, html');
+                    elements.forEach(function(el) {
+                        el.scrollTop = 0;
+                    });
+                } catch(e) {}
             </script>
         """,
         height=0
@@ -388,20 +360,15 @@ elif st.session_state.page == 'booking':
         <br>
         """, unsafe_allow_html=True)
 
-        if st.button("トップページ（カレンダー）へ戻る"):
-            st.session_state.selected_slot = None
-            st.session_state.booking_success = False
-            st.session_state.page = 'calendar'
-            st.rerun()
+        # コールバックで確実にカレンダーに戻る
+        st.button("トップページ（カレンダー）へ戻る", on_click=to_calendar)
 
     # ---------------------------
     # パターンB：入力フォーム画面
     # ---------------------------
     else:
-        if st.button("← カレンダーに戻る"):
-            st.session_state.selected_slot = None
-            st.session_state.page = 'calendar'
-            st.rerun()
+        # コールバックで確実にカレンダーに戻る
+        st.button("← カレンダーに戻る", on_click=to_calendar)
 
         if st.session_state.selected_slot:
             slot = st.session_state.selected_slot
@@ -427,7 +394,6 @@ elif st.session_state.page == 'booking':
                 }
                 selected_duration = st.selectbox("ご利用予定時間を選択してください *", list(duration_options.keys()))
                 duration_minutes = duration_options[selected_duration]
-                
                 st.caption("※「介護タクシー」「お手伝い支援」以外のサービスをご利用の場合は、「30分」を選択してください。")
 
                 st.markdown("---")
@@ -437,16 +403,13 @@ elif st.session_state.page == 'booking':
                     name = st.text_input("お名前 *")
                 with col_f2:
                     tel = st.text_input("電話番号 *", placeholder="090-0000-0000")
-                
                 email = st.text_input("メールアドレス", placeholder="予約完了通知を受け取る場合に記入")
 
                 st.markdown("---")
                 st.markdown("##### 3. サービス内容")
                 service_options = [
-                    "介護タクシー（保険外）外出支援",
-                    "買い物支援（リカーショップはやし限定）",
-                    "お手伝い支援",
-                    "安否確認サービス ￥2,000(税込)"
+                    "介護タクシー（保険外）外出支援", "買い物支援（リカーショップはやし限定）",
+                    "お手伝い支援", "安否確認サービス ￥2,000(税込)"
                 ]
                 service_type = st.radio("ご利用を希望されるサービスを選択してください *", service_options)
 
@@ -462,13 +425,10 @@ elif st.session_state.page == 'booking':
                     "リクライニング車いすを希望 ￥700(税込)", "ストレッチャー希望（要相談）", "利用なし"
                 ]
                 wheelchair = st.radio("車いすの利用について *", wheelchair_opts)
-
                 care_opts = ["見守りのみ", "移乗介助が必要（ベッドから車椅子への移動手伝い）", "階段介助あり（要事前相談）"]
                 care_req = st.radio("介助は必要ですか？", care_opts, index=0)
-
                 passengers_opts = ["１名のみ", "２名", "３名"]
                 passengers = st.radio("同乗者の人数", passengers_opts, index=0)
-
                 is_same_person = st.radio("ご利用者とご予約者は同じですか？ *", ["はい", "いいえ"])
                 st.caption("※「いいえ」の場合は、備考欄に当日伺う先のお名前とご住所を記載ください")
 
@@ -479,14 +439,10 @@ elif st.session_state.page == 'booking':
 
                 st.markdown("---")
                 note = st.text_area("備考・ご要望 (150字まで)", placeholder="何か気になることがあればご自由にどうぞ！", max_chars=150)
-
                 st.markdown("<br>", unsafe_allow_html=True)
                 
                 submitted = st.form_submit_button("予約を確定する", use_container_width=True)
 
-            # ---------------------------
-            # フォーム送信後の処理
-            # ---------------------------
             if submitted:
                 if not name or not tel or not location_from:
                     st.error("必須項目（名前、電話番号、お迎え場所）を入力してください。")
@@ -501,7 +457,6 @@ elif st.session_state.page == 'booking':
                         st.error(f"申し訳ありません。選択された時間帯（{selected_duration}）だと、途中で他の予約が入っているため予約できません。時間を短くするか、別の開始時間をお試しください。")
                     else:
                         final_date_str = f"{slot.year}/{slot.month}/{slot.day} {slot.hour}:{slot.minute:02d}～{end_dt.hour}:{end_dt.minute:02d}"
-                        
                         details_text = f"""
 ■日時: {final_date_str} ({selected_duration})
 ■サービス: {service_type}
@@ -517,16 +472,12 @@ elif st.session_state.page == 'booking':
 ■備考: {note}
 """
                         summary = f"【予約】{name}様 ({selected_duration}) - {service_type}"
-                        
                         try:
                             with st.spinner('予約処理中...'):
                                 add_event(summary, start_dt, end_dt, details_text)
-                                
                                 if email:
                                     send_confirmation_email(email, name, details_text)
-                                
                                 st.session_state.booking_success = True
                                 st.rerun()
-                        
                         except Exception as e:
                             st.error(f"システムエラーが発生しました: {e}")
