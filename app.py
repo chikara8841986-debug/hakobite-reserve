@@ -208,11 +208,14 @@ def send_confirmation_email(to_email, name, booking_details):
     sender_email = st.secrets["email"]["sender_address"] 
     sender_password = st.secrets["email"]["sender_password"]
 
-    subject = "【Hakobite】ご予約ありがとうございます"
+    # 【修正】件名をハコビテに変更
+    subject = "【ハコビテ】ご予約ありがとうございます"
+    
+    # 【修正】本文内の表記もハコビテに変更
     body = f"""
 {name} 様
 
-この度は「Hakobite」をご予約いただき、誠にありがとうございます。
+この度は「ハコビテ」をご予約いただき、誠にありがとうございます。
 以下の内容でご予約を承りました。
 
 --------------------------------------------------
@@ -221,7 +224,7 @@ def send_confirmation_email(to_email, name, booking_details):
 
 ご不明な点がございましたら、お気軽にご連絡ください。
 
-介護タクシー・生活支援 Hakobite
+介護タクシー・生活支援 ハコビテ
 電話: 080-4950-6821
 """
     msg = MIMEText(body)
@@ -251,6 +254,8 @@ if 'selected_slot' not in st.session_state:
     st.session_state.selected_slot = None
 if 'page' not in st.session_state:
     st.session_state.page = 'calendar'
+if 'booking_success' not in st.session_state:
+    st.session_state.booking_success = False
 
 # ---------------------------------------------------------
 # ページ1: カレンダー画面
@@ -298,9 +303,9 @@ if st.session_state.page == 'calendar':
     # イベント取得
     existing_events = get_events(week_dates[0], week_dates[-1])
     
-    # 18:00最終にするためのリスト作成
+    # 30分刻みの時間リスト (8:00 ～ 18:00)
     times = []
-    for h in range(8, 19): # 8時～18時
+    for h in range(8, 19): 
         times.append(datetime.time(hour=h, minute=0))
         if h < 18: # 18:30は含めない
             times.append(datetime.time(hour=h, minute=30))
@@ -341,10 +346,11 @@ if st.session_state.page == 'calendar':
                     if st.button(label, key=f"btn_{btn_key}", use_container_width=True):
                         st.session_state.selected_slot = datetime.datetime.combine(target_date, time)
                         st.session_state.page = 'booking'
+                        st.session_state.booking_success = False 
                         st.rerun()
 
 # ---------------------------------------------------------
-# ページ2: 予約詳細入力フォーム
+# ページ2: 予約詳細入力フォーム（または完了画面）
 # ---------------------------------------------------------
 elif st.session_state.page == 'booking':
     # 強力なスクロールリセットJS
@@ -366,131 +372,137 @@ elif st.session_state.page == 'booking':
         height=0
     )
 
-    if st.button("← カレンダーに戻る"):
-        st.session_state.selected_slot = None
-        st.session_state.page = 'calendar'
-        st.rerun()
-
-    if st.session_state.selected_slot:
-        slot = st.session_state.selected_slot
-        w_list = ['月', '火', '水', '木', '金', '土', '日']
+    # ---------------------------
+    # パターンA：予約完了画面
+    # ---------------------------
+    if st.session_state.booking_success:
+        st.success("予約が完了しました！")
+        st.balloons()
         
-        date_str = f"{slot.year}/{slot.month}/{slot.day} ({w_list[slot.weekday()]}) {slot.hour}:{slot.minute:02d} ～"
+        st.markdown("""
+        <div style="background-color: white; padding: 20px; border-radius: 10px; border: 2px solid #006400; text-align: center;">
+            <h3 style="color: #006400;">ご予約ありがとうございます</h3>
+            <p>確認メールをお送りしましたのでご確認ください。</p>
+            <p>※メールが届かない場合は、迷惑メールフォルダもご確認ください。</p>
+        </div>
+        <br>
+        """, unsafe_allow_html=True)
 
-        st.markdown(
-            f"""
-            <div style="background-color: white; padding: 20px; border-radius: 10px; border: 1px solid #FF8C00; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px;">
-            <h2 style="margin-top:0; color:#006400; text-align: center;">📝 予約情報の入力</h2>
-            <hr>
-            <p style="font-size:1.2em; text-align: center;">開始日時: <span style="color:#FF8C00; font-weight:bold; font-size: 1.3em;">{date_str}</span></p>
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
-        
-        # ---------------------------------------------------------
-        # 【修正点】フォームブロック
-        # ---------------------------------------------------------
-        with st.form("booking_form"):
-            st.markdown("##### 1. ご利用時間（目安）")
+        if st.button("トップページ（カレンダー）へ戻る"):
+            st.session_state.selected_slot = None
+            st.session_state.booking_success = False
+            st.session_state.page = 'calendar'
+            st.rerun()
+
+    # ---------------------------
+    # パターンB：入力フォーム画面
+    # ---------------------------
+    else:
+        if st.button("← カレンダーに戻る"):
+            st.session_state.selected_slot = None
+            st.session_state.page = 'calendar'
+            st.rerun()
+
+        if st.session_state.selected_slot:
+            slot = st.session_state.selected_slot
+            w_list = ['月', '火', '水', '木', '金', '土', '日']
+            date_str = f"{slot.year}/{slot.month}/{slot.day} ({w_list[slot.weekday()]}) {slot.hour}:{slot.minute:02d} ～"
+
+            st.markdown(
+                f"""
+                <div style="background-color: white; padding: 20px; border-radius: 10px; border: 1px solid #FF8C00; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px;">
+                <h2 style="margin-top:0; color:#006400; text-align: center;">📝 予約情報の入力</h2>
+                <hr>
+                <p style="font-size:1.2em; text-align: center;">開始日時: <span style="color:#FF8C00; font-weight:bold; font-size: 1.3em;">{date_str}</span></p>
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
             
-            duration_options = {
-                "30分": 30,
-                "1時間": 60,
-                "1時間30分": 90,
-                "2時間": 120,
-                "2時間30分": 150,
-                "3時間": 180,
-                "4時間": 240,
-                "5時間": 300
-            }
-            selected_duration = st.selectbox("ご利用予定時間を選択してください *", list(duration_options.keys()))
-            duration_minutes = duration_options[selected_duration]
-            
-            st.caption("※「介護タクシー」「お手伝い支援」以外のサービスをご利用の場合は、「30分」を選択してください。")
-
-            st.markdown("---")
-            st.markdown("##### 2. お客様情報")
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                name = st.text_input("お名前 *")
-            with col_f2:
-                tel = st.text_input("電話番号 *", placeholder="090-0000-0000")
-            
-            email = st.text_input("メールアドレス", placeholder="予約完了通知を受け取る場合に記入")
-
-            st.markdown("---")
-            st.markdown("##### 3. サービス内容")
-            service_options = [
-                "介護タクシー（保険外）外出支援",
-                "買い物支援（リカーショップはやし限定）",
-                "お手伝い支援",
-                "安否確認サービス ￥2,000(税込)"
-            ]
-            service_type = st.radio("ご利用を希望されるサービスを選択してください *", service_options)
-
-            st.markdown("---")
-            st.markdown("##### 4. 行程")
-            location_from = st.text_area("お迎え場所・ご利用場所 * (150字まで)", max_chars=150)
-            location_to = st.text_area("行き先（介護タクシーご利用の場合） (150字まで)", max_chars=150)
-
-            st.markdown("---")
-            st.markdown("##### 5. 詳細オプション")
-            
-            wheelchair_opts = [
-                "自分の車いすを使用",
-                "普通車いすをレンタル希望 ￥500(税込)",
-                "リクライニング車いすを希望 ￥700(税込)",
-                "ストレッチャー希望（要相談）",
-                "利用なし"
-            ]
-            wheelchair = st.radio("車いすの利用について *", wheelchair_opts)
-
-            care_opts = [
-                "見守りのみ",
-                "移乗介助が必要（ベッドから車椅子への移動手伝い）",
-                "階段介助あり（要事前相談）"
-            ]
-            care_req = st.radio("介助は必要ですか？", care_opts, index=0)
-
-            passengers_opts = ["１名のみ", "２名", "３名"]
-            passengers = st.radio("同乗者の人数", passengers_opts, index=0)
-
-            is_same_person = st.radio("ご利用者とご予約者は同じですか？ *", ["はい", "いいえ"])
-            st.caption("※「いいえ」の場合は、備考欄に当日伺う先のお名前とご住所を記載ください")
-
-            st.markdown("---")
-            st.markdown("##### 6. お支払い方法")
-            
-            payment_methods = ["現金", "銀行振込", "請求書払い（法人）", "掛け払い"]
-            payment = st.radio("お支払い方法を選択してください *", payment_methods)
-
-            st.markdown("---")
-            note = st.text_area("備考・ご要望 (150字まで)", placeholder="何か気になることがあればご自由にどうぞ！", max_chars=150)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            submitted = st.form_submit_button("予約を確定する", use_container_width=True)
-            
-        # ---------------------------------------------------------
-        # 【修正点】フォームの外側で処理を実行（エラー対策）
-        # ---------------------------------------------------------
-        if submitted:
-            if not name or not tel or not location_from:
-                st.error("必須項目（名前、電話番号、お迎え場所）を入力してください。")
-            else:
-                start_dt = slot.replace(tzinfo=JST)
-                end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
+            with st.form("booking_form"):
+                st.markdown("##### 1. ご利用時間（目安）")
+                duration_options = {
+                    "30分": 30, "1時間": 60, "1時間30分": 90, "2時間": 120,
+                    "2時間30分": 150, "3時間": 180, "4時間": 240, "5時間": 300
+                }
+                selected_duration = st.selectbox("ご利用予定時間を選択してください *", list(duration_options.keys()))
+                duration_minutes = duration_options[selected_duration]
                 
-                with st.spinner('空き状況を最終確認中...'):
-                    is_conflict = check_conflict(start_dt, end_dt)
+                st.caption("※「介護タクシー」「お手伝い支援」以外のサービスをご利用の場合は、「30分」を選択してください。")
+
+                st.markdown("---")
+                st.markdown("##### 2. お客様情報")
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    name = st.text_input("お名前 *")
+                with col_f2:
+                    tel = st.text_input("電話番号 *", placeholder="090-0000-0000")
                 
-                if is_conflict:
-                    st.error(f"申し訳ありません。選択された時間帯（{selected_duration}）だと、途中で他の予約が入っているため予約できません。時間を短くするか、別の開始時間をお試しください。")
+                email = st.text_input("メールアドレス", placeholder="予約完了通知を受け取る場合に記入")
+
+                st.markdown("---")
+                st.markdown("##### 3. サービス内容")
+                service_options = [
+                    "介護タクシー（保険外）外出支援",
+                    "買い物支援（リカーショップはやし限定）",
+                    "お手伝い支援",
+                    "安否確認サービス ￥2,000(税込)"
+                ]
+                service_type = st.radio("ご利用を希望されるサービスを選択してください *", service_options)
+
+                st.markdown("---")
+                st.markdown("##### 4. 行程")
+                location_from = st.text_area("お迎え場所・ご利用場所 * (150字まで)", max_chars=150)
+                location_to = st.text_area("行き先（介護タクシーご利用の場合） (150字まで)", max_chars=150)
+
+                st.markdown("---")
+                st.markdown("##### 5. 詳細オプション")
+                wheelchair_opts = [
+                    "自分の車いすを使用", "普通車いすをレンタル希望 ￥500(税込)",
+                    "リクライニング車いすを希望 ￥700(税込)", "ストレッチャー希望（要相談）", "利用なし"
+                ]
+                wheelchair = st.radio("車いすの利用について *", wheelchair_opts)
+
+                care_opts = ["見守りのみ", "移乗介助が必要（ベッドから車椅子への移動手伝い）", "階段介助あり（要事前相談）"]
+                care_req = st.radio("介助は必要ですか？", care_opts, index=0)
+
+                passengers_opts = ["１名のみ", "２名", "３名"]
+                passengers = st.radio("同乗者の人数", passengers_opts, index=0)
+
+                is_same_person = st.radio("ご利用者とご予約者は同じですか？ *", ["はい", "いいえ"])
+                st.caption("※「いいえ」の場合は、備考欄に当日伺う先のお名前とご住所を記載ください")
+
+                st.markdown("---")
+                st.markdown("##### 6. お支払い方法")
+                payment_methods = ["現金", "銀行振込", "請求書払い（法人）", "掛け払い"]
+                payment = st.radio("お支払い方法を選択してください *", payment_methods)
+
+                st.markdown("---")
+                note = st.text_area("備考・ご要望 (150字まで)", placeholder="何か気になることがあればご自由にどうぞ！", max_chars=150)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                submitted = st.form_submit_button("予約を確定する", use_container_width=True)
+
+            # ---------------------------
+            # フォーム送信後の処理
+            # ---------------------------
+            if submitted:
+                if not name or not tel or not location_from:
+                    st.error("必須項目（名前、電話番号、お迎え場所）を入力してください。")
                 else:
-                    final_date_str = f"{slot.year}/{slot.month}/{slot.day} {slot.hour}:{slot.minute:02d}～{end_dt.hour}:{end_dt.minute:02d}"
+                    start_dt = slot.replace(tzinfo=JST)
+                    end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
                     
-                    details_text = f"""
+                    with st.spinner('空き状況を最終確認中...'):
+                        is_conflict = check_conflict(start_dt, end_dt)
+                    
+                    if is_conflict:
+                        st.error(f"申し訳ありません。選択された時間帯（{selected_duration}）だと、途中で他の予約が入っているため予約できません。時間を短くするか、別の開始時間をお試しください。")
+                    else:
+                        final_date_str = f"{slot.year}/{slot.month}/{slot.day} {slot.hour}:{slot.minute:02d}～{end_dt.hour}:{end_dt.minute:02d}"
+                        
+                        details_text = f"""
 ■日時: {final_date_str} ({selected_duration})
 ■サービス: {service_type}
 ■お名前: {name}
@@ -504,27 +516,17 @@ elif st.session_state.page == 'booking':
 ■支払い: {payment}
 ■備考: {note}
 """
-                    summary = f"【予約】{name}様 ({selected_duration}) - {service_type}"
-                    
-                    try:
-                        with st.spinner('予約処理中...'):
-                            add_event(summary, start_dt, end_dt, details_text)
-                            
-                            mail_sent_msg = ""
-                            if email:
-                                if send_confirmation_email(email, name, details_text):
-                                    mail_sent_msg = f"\n{email} 宛に確認メールを送信しました。"
-                                else:
-                                    mail_sent_msg = "\n※メール送信に失敗しましたが、予約は完了しています。"
-                            
-                            st.success(f"予約が完了しました！{mail_sent_msg}")
-                            st.balloons()
-                            
-                            # ここがフォームの外なので安全にボタンを配置可能
-                            if st.button("トップページ（カレンダー）へ戻る"):
-                                st.session_state.selected_slot = None
-                                st.session_state.page = 'calendar'
+                        summary = f"【予約】{name}様 ({selected_duration}) - {service_type}"
+                        
+                        try:
+                            with st.spinner('予約処理中...'):
+                                add_event(summary, start_dt, end_dt, details_text)
+                                
+                                if email:
+                                    send_confirmation_email(email, name, details_text)
+                                
+                                st.session_state.booking_success = True
                                 st.rerun()
                         
-                    except Exception as e:
-                        st.error(f"システムエラーが発生しました: {e}")
+                        except Exception as e:
+                            st.error(f"システムエラーが発生しました: {e}")
