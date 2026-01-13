@@ -298,9 +298,7 @@ if st.session_state.page == 'calendar':
     # イベント取得
     existing_events = get_events(week_dates[0], week_dates[-1])
     
-    # ---------------------------------------------------------
-    # 【変更点】18:00最終にするためのリスト作成
-    # ---------------------------------------------------------
+    # 18:00最終にするためのリスト作成
     times = []
     for h in range(8, 19): # 8時～18時
         times.append(datetime.time(hour=h, minute=0))
@@ -349,13 +347,10 @@ if st.session_state.page == 'calendar':
 # ページ2: 予約詳細入力フォーム
 # ---------------------------------------------------------
 elif st.session_state.page == 'booking':
-    # ---------------------------------------------------------
-    # 【変更点】強力なスクロールリセットJS（トップに戻る機能）
-    # ---------------------------------------------------------
+    # 強力なスクロールリセットJS
     components.html(
         """
             <script>
-                // 複数の要素に対してスクロールトップを試みる強力な書き方
                 var doc = window.parent.document;
                 var targets = [
                     doc.querySelector('section.main'),
@@ -393,6 +388,9 @@ elif st.session_state.page == 'booking':
             unsafe_allow_html=True
         )
         
+        # ---------------------------------------------------------
+        # 【修正点】フォームブロック
+        # ---------------------------------------------------------
         with st.form("booking_form"):
             st.markdown("##### 1. ご利用時間（目安）")
             
@@ -409,7 +407,6 @@ elif st.session_state.page == 'booking':
             selected_duration = st.selectbox("ご利用予定時間を選択してください *", list(duration_options.keys()))
             duration_minutes = duration_options[selected_duration]
             
-            # 【変更点】ご利用時間の注記を追加
             st.caption("※「介護タクシー」「お手伝い支援」以外のサービスをご利用の場合は、「30分」を選択してください。")
 
             st.markdown("---")
@@ -464,7 +461,7 @@ elif st.session_state.page == 'booking':
 
             st.markdown("---")
             st.markdown("##### 6. お支払い方法")
-            # 【変更点】PayPay削除
+            
             payment_methods = ["現金", "銀行振込", "請求書払い（法人）", "掛け払い"]
             payment = st.radio("お支払い方法を選択してください *", payment_methods)
 
@@ -475,24 +472,25 @@ elif st.session_state.page == 'booking':
             
             submitted = st.form_submit_button("予約を確定する", use_container_width=True)
             
-            if submitted:
-                if not name or not tel or not location_from:
-                    st.error("必須項目（名前、電話番号、お迎え場所）を入力してください。")
+        # ---------------------------------------------------------
+        # 【修正点】フォームの外側で処理を実行（エラー対策）
+        # ---------------------------------------------------------
+        if submitted:
+            if not name or not tel or not location_from:
+                st.error("必須項目（名前、電話番号、お迎え場所）を入力してください。")
+            else:
+                start_dt = slot.replace(tzinfo=JST)
+                end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
+                
+                with st.spinner('空き状況を最終確認中...'):
+                    is_conflict = check_conflict(start_dt, end_dt)
+                
+                if is_conflict:
+                    st.error(f"申し訳ありません。選択された時間帯（{selected_duration}）だと、途中で他の予約が入っているため予約できません。時間を短くするか、別の開始時間をお試しください。")
                 else:
-                    start_dt = slot.replace(tzinfo=JST)
-                    end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
+                    final_date_str = f"{slot.year}/{slot.month}/{slot.day} {slot.hour}:{slot.minute:02d}～{end_dt.hour}:{end_dt.minute:02d}"
                     
-                    # 重複チェック（ダブルブッキング防止）
-                    with st.spinner('空き状況を最終確認中...'):
-                        is_conflict = check_conflict(start_dt, end_dt)
-                    
-                    if is_conflict:
-                        st.error(f"申し訳ありません。選択された時間帯（{selected_duration}）だと、途中で他の予約が入っているため予約できません。時間を短くするか、別の開始時間をお試しください。")
-                    else:
-                        # 重複がなければ予約実行
-                        final_date_str = f"{slot.year}/{slot.month}/{slot.day} {slot.hour}:{slot.minute:02d}～{end_dt.hour}:{end_dt.minute:02d}"
-                        
-                        details_text = f"""
+                    details_text = f"""
 ■日時: {final_date_str} ({selected_duration})
 ■サービス: {service_type}
 ■お名前: {name}
@@ -506,26 +504,27 @@ elif st.session_state.page == 'booking':
 ■支払い: {payment}
 ■備考: {note}
 """
-                        summary = f"【予約】{name}様 ({selected_duration}) - {service_type}"
-                        
-                        try:
-                            with st.spinner('予約処理中...'):
-                                add_event(summary, start_dt, end_dt, details_text)
-                                
-                                mail_sent_msg = ""
-                                if email:
-                                    if send_confirmation_email(email, name, details_text):
-                                        mail_sent_msg = f"\n{email} 宛に確認メールを送信しました。"
-                                    else:
-                                        mail_sent_msg = "\n※メール送信に失敗しましたが、予約は完了しています。"
-                                
-                                st.success(f"予約が完了しました！{mail_sent_msg}")
-                                st.balloons()
-                                
-                                if st.button("トップページ（カレンダー）へ戻る"):
-                                    st.session_state.selected_slot = None
-                                    st.session_state.page = 'calendar'
-                                    st.rerun()
+                    summary = f"【予約】{name}様 ({selected_duration}) - {service_type}"
+                    
+                    try:
+                        with st.spinner('予約処理中...'):
+                            add_event(summary, start_dt, end_dt, details_text)
                             
-                        except Exception as e:
-                            st.error(f"システムエラーが発生しました: {e}")
+                            mail_sent_msg = ""
+                            if email:
+                                if send_confirmation_email(email, name, details_text):
+                                    mail_sent_msg = f"\n{email} 宛に確認メールを送信しました。"
+                                else:
+                                    mail_sent_msg = "\n※メール送信に失敗しましたが、予約は完了しています。"
+                            
+                            st.success(f"予約が完了しました！{mail_sent_msg}")
+                            st.balloons()
+                            
+                            # ここがフォームの外なので安全にボタンを配置可能
+                            if st.button("トップページ（カレンダー）へ戻る"):
+                                st.session_state.selected_slot = None
+                                st.session_state.page = 'calendar'
+                                st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"システムエラーが発生しました: {e}")
