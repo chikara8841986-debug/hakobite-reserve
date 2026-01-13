@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import datetime
 import smtplib
 from email.mime.text import MIMEText
@@ -112,7 +113,7 @@ div.stButton > button:hover {
 
     /* 3. 各列の最小幅を設定 */
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) > div[data-testid="column"] {
-        min-width: 60px !important; /* ボタンが潰れない最低幅 */
+        min-width: 60px !important;
         flex: 0 0 auto !important;
     }
 
@@ -166,6 +167,22 @@ def get_events(start_date, end_date):
     except Exception as e:
         st.error(f"カレンダー情報の取得に失敗しました: {e}")
         return []
+
+def check_conflict(start_dt, end_dt):
+    """指定された時間帯に予約が被っていないかチェックする"""
+    try:
+        events_result = service.events().list(
+            calendarId=CALENDAR_ID,
+            timeMin=start_dt.isoformat(),
+            timeMax=end_dt.isoformat(),
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        items = events_result.get('items', [])
+        return len(items) > 0 # 重複があればTrueを返す
+    except Exception as e:
+        st.error(f"重複チェックエラー: {e}")
+        return True # エラーの場合は安全のため予約不可とする
 
 def add_event(summary, start_dt, end_dt, description=""):
     """Googleカレンダーにイベントを追加"""
@@ -271,7 +288,7 @@ if st.session_state.page == 'calendar':
 
     with col_nav2:
         st.markdown(f"<h3 style='text-align: center;'>{week_label_start} ～ {week_label_end} の空き状況</h3>", unsafe_allow_html=True)
-        # 案内文（修正済み）
+        # 案内文
         st.markdown("""
         <div class="mobile-notice">
         💡 スマートフォンでご覧の方は、画面を横向きにすると全日程が見やすくなります。
@@ -280,22 +297,27 @@ if st.session_state.page == 'calendar':
 
     # イベント取得
     existing_events = get_events(week_dates[0], week_dates[-1])
-    times = [datetime.time(hour=h, minute=0) for h in range(8, 19)]
+    
+    # 30分刻みの時間リスト (8:00 ～ 18:30)
+    times = []
+    for h in range(8, 19): 
+        times.append(datetime.time(hour=h, minute=0))
+        times.append(datetime.time(hour=h, minute=30))
+
     weekdays_ja = ["月", "火", "水", "木", "金", "土", "日"]
 
-    # カレンダー本体（7列）
+    # カレンダー本体
     cols = st.columns(7)
     for i, col in enumerate(cols):
         target_date = week_dates[i]
         day_str = weekdays_ja[target_date.weekday()]
         
         with col:
-            # スマホ用ヘッダー
             st.markdown(f"<div class='calendar-header' style='text-align:center; font-weight:bold; color:#006400; border-bottom:2px solid #FF8C00; margin-bottom:5px;'>{target_date.month}/{target_date.day}<br>({day_str})</div>", unsafe_allow_html=True)
             
             for time in times:
                 slot_start = datetime.datetime.combine(target_date, time).replace(tzinfo=JST)
-                slot_end = slot_start + datetime.timedelta(hours=1)
+                slot_end = slot_start + datetime.timedelta(minutes=30)
                 is_past = slot_start < datetime.datetime.now(JST)
                 
                 is_booked = False
@@ -312,11 +334,9 @@ if st.session_state.page == 'calendar':
                 btn_key = f"{target_date}_{time}"
                 
                 if is_booked or is_past:
-                    # ✕ボタン
                     st.button("✕", key=f"dis_{btn_key}", disabled=True, use_container_width=True)
                 else:
-                    # 時間ボタン
-                    label = f"{time.hour}:00"
+                    label = f"{time.hour}:{time.minute:02d}"
                     if st.button(label, key=f"btn_{btn_key}", use_container_width=True):
                         st.session_state.selected_slot = datetime.datetime.combine(target_date, time)
                         st.session_state.page = 'booking'
@@ -326,7 +346,16 @@ if st.session_state.page == 'calendar':
 # ページ2: 予約詳細入力フォーム
 # ---------------------------------------------------------
 elif st.session_state.page == 'booking':
-    
+    # 画面遷移時にトップへスクロールさせるJS
+    components.html(
+        """
+            <script>
+                window.parent.document.querySelector('section.main').scrollTo(0, 0);
+            </script>
+        """,
+        height=0
+    )
+
     if st.button("← カレンダーに戻る"):
         st.session_state.selected_slot = None
         st.session_state.page = 'calendar'
@@ -335,21 +364,39 @@ elif st.session_state.page == 'booking':
     if st.session_state.selected_slot:
         slot = st.session_state.selected_slot
         w_list = ['月', '火', '水', '木', '金', '土', '日']
-        date_str = f"{slot.year}/{slot.month}/{slot.day} ({w_list[slot.weekday()]}) {slot.hour}:00～{slot.hour+1}:00"
+        
+        # 開始時間を表示
+        date_str = f"{slot.year}/{slot.month}/{slot.day} ({w_list[slot.weekday()]}) {slot.hour}:{slot.minute:02d} ～"
 
         st.markdown(
             f"""
             <div style="background-color: white; padding: 20px; border-radius: 10px; border: 1px solid #FF8C00; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px;">
             <h2 style="margin-top:0; color:#006400; text-align: center;">📝 予約情報の入力</h2>
             <hr>
-            <p style="font-size:1.2em; text-align: center;">選択日時: <span style="color:#FF8C00; font-weight:bold; font-size: 1.3em;">{date_str}</span></p>
+            <p style="font-size:1.2em; text-align: center;">開始日時: <span style="color:#FF8C00; font-weight:bold; font-size: 1.3em;">{date_str}</span></p>
             </div>
             """, 
             unsafe_allow_html=True
         )
         
         with st.form("booking_form"):
-            st.markdown("##### 1. お客様情報")
+            st.markdown("##### 1. ご利用時間（目安）")
+            # 所要時間の選択
+            duration_options = {
+                "30分": 30,
+                "1時間": 60,
+                "1時間30分": 90,
+                "2時間": 120,
+                "2時間30分": 150,
+                "3時間": 180,
+                "4時間": 240,
+                "5時間": 300
+            }
+            selected_duration = st.selectbox("ご利用予定時間を選択してください *", list(duration_options.keys()))
+            duration_minutes = duration_options[selected_duration]
+
+            st.markdown("---")
+            st.markdown("##### 2. お客様情報")
             col_f1, col_f2 = st.columns(2)
             with col_f1:
                 name = st.text_input("お名前 *")
@@ -359,7 +406,7 @@ elif st.session_state.page == 'booking':
             email = st.text_input("メールアドレス", placeholder="予約完了通知を受け取る場合に記入")
 
             st.markdown("---")
-            st.markdown("##### 2. サービス内容")
+            st.markdown("##### 3. サービス内容")
             service_options = [
                 "介護タクシー（保険外）外出支援",
                 "買い物支援（リカーショップはやし限定）",
@@ -369,12 +416,12 @@ elif st.session_state.page == 'booking':
             service_type = st.radio("ご利用を希望されるサービスを選択してください *", service_options)
 
             st.markdown("---")
-            st.markdown("##### 3. 行程")
+            st.markdown("##### 4. 行程")
             location_from = st.text_area("お迎え場所・ご利用場所 * (150字まで)", max_chars=150)
             location_to = st.text_area("行き先（介護タクシーご利用の場合） (150字まで)", max_chars=150)
 
             st.markdown("---")
-            st.markdown("##### 4. 詳細オプション")
+            st.markdown("##### 5. 詳細オプション")
             
             wheelchair_opts = [
                 "自分の車いすを使用",
@@ -399,6 +446,14 @@ elif st.session_state.page == 'booking':
             st.caption("※「いいえ」の場合は、備考欄に当日伺う先のお名前とご住所を記載ください")
 
             st.markdown("---")
+            st.markdown("##### 6. お支払い方法")
+            # ---------------------------------------------------------
+            # 【変更点】掛け払いを追加
+            # ---------------------------------------------------------
+            payment_methods = ["現金", "PayPay", "銀行振込", "請求書払い（法人）", "掛け払い"]
+            payment = st.radio("お支払い方法を選択してください *", payment_methods)
+
+            st.markdown("---")
             note = st.text_area("備考・ご要望 (150字まで)", placeholder="何か気になることがあればご自由にどうぞ！", max_chars=150)
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -410,10 +465,21 @@ elif st.session_state.page == 'booking':
                     st.error("必須項目（名前、電話番号、お迎え場所）を入力してください。")
                 else:
                     start_dt = slot.replace(tzinfo=JST)
-                    end_dt = start_dt + datetime.timedelta(hours=1)
+                    # 選択された所要時間で終了時刻を計算
+                    end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
                     
-                    details_text = f"""
-■日時: {date_str}
+                    # 重複チェック（ダブルブッキング防止）
+                    with st.spinner('空き状況を最終確認中...'):
+                        is_conflict = check_conflict(start_dt, end_dt)
+                    
+                    if is_conflict:
+                        st.error(f"申し訳ありません。選択された時間帯（{selected_duration}）だと、途中で他の予約が入っているため予約できません。時間を短くするか、別の開始時間をお試しください。")
+                    else:
+                        # 重複がなければ予約実行
+                        final_date_str = f"{slot.year}/{slot.month}/{slot.day} {slot.hour}:{slot.minute:02d}～{end_dt.hour}:{end_dt.minute:02d}"
+                        
+                        details_text = f"""
+■日時: {final_date_str} ({selected_duration})
 ■サービス: {service_type}
 ■お名前: {name}
 ■電話: {tel}
@@ -423,28 +489,29 @@ elif st.session_state.page == 'booking':
 ■介助: {care_req}
 ■同乗: {passengers}
 ■本人確認: ご予約者と{'同じ' if is_same_person == 'はい' else '異なる'}
+■支払い: {payment}
 ■備考: {note}
 """
-                    summary = f"【予約】{name}様 - {service_type}"
-                    
-                    try:
-                        with st.spinner('予約処理中...'):
-                            add_event(summary, start_dt, end_dt, details_text)
-                            
-                            mail_sent_msg = ""
-                            if email:
-                                if send_confirmation_email(email, name, details_text):
-                                    mail_sent_msg = f"\n{email} 宛に確認メールを送信しました。"
-                                else:
-                                    mail_sent_msg = "\n※メール送信に失敗しましたが、予約は完了しています。"
-                            
-                            st.success(f"予約が完了しました！{mail_sent_msg}")
-                            st.balloons()
-                            
-                            if st.button("トップページ（カレンダー）へ戻る"):
-                                st.session_state.selected_slot = None
-                                st.session_state.page = 'calendar'
-                                st.rerun()
+                        summary = f"【予約】{name}様 ({selected_duration}) - {service_type}"
                         
-                    except Exception as e:
-                        st.error(f"システムエラーが発生しました: {e}")
+                        try:
+                            with st.spinner('予約処理中...'):
+                                add_event(summary, start_dt, end_dt, details_text)
+                                
+                                mail_sent_msg = ""
+                                if email:
+                                    if send_confirmation_email(email, name, details_text):
+                                        mail_sent_msg = f"\n{email} 宛に確認メールを送信しました。"
+                                    else:
+                                        mail_sent_msg = "\n※メール送信に失敗しましたが、予約は完了しています。"
+                                
+                                st.success(f"予約が完了しました！{mail_sent_msg}")
+                                st.balloons()
+                                
+                                if st.button("トップページ（カレンダー）へ戻る"):
+                                    st.session_state.selected_slot = None
+                                    st.session_state.page = 'calendar'
+                                    st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"システムエラーが発生しました: {e}")
