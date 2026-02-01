@@ -90,49 +90,40 @@ div.stButton > button:hover {
     font-weight: bold;
 }
 
-/* 6. 【修正】ドロップダウン・入力欄のダークモード対策（黒い穴を白くする） */
-/* セレクトボックスの本体 */
+/* 6. ドロップダウン・入力欄のダークモード対策 */
 div[data-baseweb="select"] > div {
     background-color: #FFFFFF !important;
     color: #333333 !important;
     border-color: #ccc !important;
 }
-/* 開いた時のメニューリスト全体 */
 div[data-baseweb="popover"],
 div[data-baseweb="menu"],
 div[data-baseweb="popover"] div {
     background-color: #FFFFFF !important;
     color: #333333 !important;
 }
-/* 選択肢の文字色 */
 li[role="option"] {
     color: #333333 !important;
     background-color: #FFFFFF !important;
 }
-/* 選択中のハイライト色 */
 li[role="option"]:hover, li[role="option"][aria-selected="true"] {
-    background-color: #E8F5E9 !important; /* ハコビテグリーン */
+    background-color: #E8F5E9 !important;
     color: #006400 !important;
 }
-/* ラジオボタンなどの文字色強制 */
 .stRadio label p {
     color: #333333 !important;
 }
 
-/* ラジオボタンの選択時の色を変更 */
+/* 7. ラジオボタンの緑色設定 */
 div[role="radiogroup"] > label > div:first-child {
-    border-color: #009688 !important; /* 緑色 */
-    background-color: #009688 !important; /* 緑色 */
+    border-color: #009688 !important;
+    background-color: #009688 !important;
 }
-
-/* ラジオボタンの未選択時の枠線の色を変更 */
 div[role="radiogroup"] > label > div:first-child > div {
-    border-color: #009688 !important; /* 緑色 */
+    border-color: #009688 !important;
 }
 
-/* =========================================
-   【スマホ対策】横スクロールで快適に見せる設定
-   ========================================= */
+/* スマホ対策 */
 @media (max-width: 640px) {
     .block-container {
         padding-left: 0.5rem !important;
@@ -179,23 +170,18 @@ else:
     st.stop()
 
 # ---------------------------------------------------------
-# 関数定義（状態変更用）
+# 関数定義
 # ---------------------------------------------------------
 def to_calendar():
-    """カレンダー画面に戻る"""
     st.session_state.selected_slot = None
     st.session_state.booking_success = False
     st.session_state.page = 'calendar'
 
 def to_booking(target_dt):
-    """予約画面へ進む"""
     st.session_state.selected_slot = target_dt
     st.session_state.page = 'booking'
     st.session_state.booking_success = False
 
-# ---------------------------------------------------------
-# 関数定義（API関連）
-# ---------------------------------------------------------
 def get_events(start_date, end_date):
     t_min = datetime.datetime.combine(start_date, datetime.time.min).replace(tzinfo=JST).isoformat()
     t_max = datetime.datetime.combine(end_date, datetime.time.max).replace(tzinfo=JST).isoformat()
@@ -230,6 +216,7 @@ def add_event(summary, start_dt, end_dt, description=""):
     }
     service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
 
+# ★ここが重要：BCC修正済みのメール送信機能
 def send_confirmation_email(to_email, name, booking_details):
     if "email" not in st.secrets: return False
     sender_email = st.secrets["email"]["sender_address"] 
@@ -255,9 +242,9 @@ def send_confirmation_email(to_email, name, booking_details):
     msg["From"] = sender_email
     msg["To"] = to_email
     
-    # 【ここが修正ポイント】自分宛てに「+admin」をつけてBCCで送る
+    # ★修正ポイント：自分宛てに+adminをつけて送信（受信トレイに届くようにする）
     bcc_address = sender_email.replace("@", "+admin@") 
-    msg["Bcc"] = bcc_address 
+    msg["Bcc"] = bcc_address
 
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
@@ -269,6 +256,7 @@ def send_confirmation_email(to_email, name, booking_details):
     except Exception as e:
         st.error(f"メール送信エラー: {e}")
         return False
+
 # ---------------------------------------------------------
 # メイン処理
 # ---------------------------------------------------------
@@ -369,11 +357,10 @@ if st.session_state.page == 'calendar':
 # ページ2: 予約詳細入力フォーム（または完了画面）
 # ---------------------------------------------------------
 elif st.session_state.page == 'booking':
-    # 【強力なスクロールリセットJS】
+    # スクロールリセット
     components.html(
         """
             <script>
-                // 強制的にトップへスクロールさせる処理
                 try {
                     window.parent.scrollTo(0, 0);
                     var doc = window.parent.document;
@@ -387,9 +374,6 @@ elif st.session_state.page == 'booking':
         height=0
     )
 
-    # ---------------------------
-    # パターンA：予約完了画面
-    # ---------------------------
     if st.session_state.booking_success:
         st.success("予約が完了しました！")
         st.balloons()
@@ -405,9 +389,6 @@ elif st.session_state.page == 'booking':
 
         st.button("トップページ（カレンダー）へ戻る", on_click=to_calendar)
 
-    # ---------------------------
-    # パターンB：入力フォーム画面
-    # ---------------------------
     else:
         st.button("← カレンダーに戻る", on_click=to_calendar)
 
