@@ -8,13 +8,7 @@ from googleapiclient.discovery import build
 
 # ページ設定
 st.set_page_config(page_title="ハコビテ 予約システム", page_icon="🚕", layout="wide")
-import streamlit as st
 
-# 既存のコードの先頭付近、st.set_page_configの後などに以下のコードを追加してください
-
-
-# 以下、既存のアプリケーションコードが続きます
-# ...
 # ---------------------------------------------------------
 # 設定エリア & Secrets読み込み
 # ---------------------------------------------------------
@@ -123,6 +117,17 @@ li[role="option"]:hover, li[role="option"][aria-selected="true"] {
 /* ラジオボタンなどの文字色強制 */
 .stRadio label p {
     color: #333333 !important;
+}
+
+/* ラジオボタンの選択時の色を変更 */
+div[role="radiogroup"] > label > div:first-child {
+    border-color: #009688 !important; /* 緑色 */
+    background-color: #009688 !important; /* 緑色 */
+}
+
+/* ラジオボタンの未選択時の枠線の色を変更 */
+div[role="radiogroup"] > label > div:first-child > div {
+    border-color: #009688 !important; /* 緑色 */
 }
 
 /* =========================================
@@ -249,6 +254,8 @@ def send_confirmation_email(to_email, name, booking_details):
     msg["Subject"] = subject
     msg["From"] = sender_email
     msg["To"] = to_email
+    msg["Bcc"] = sender_email  # ★ここを追加しました（管理者にもBCCで送信）
+
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
