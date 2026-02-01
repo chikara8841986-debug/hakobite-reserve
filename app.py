@@ -216,13 +216,17 @@ def add_event(summary, start_dt, end_dt, description=""):
     }
     service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
 
-# ★ここが重要：BCC修正済みのメール送信機能
+# ★ここを大改造：メールを2回に分けて送信する「ダブル送信」仕様
 def send_confirmation_email(to_email, name, booking_details):
     if "email" not in st.secrets: return False
     sender_email = st.secrets["email"]["sender_address"] 
     sender_password = st.secrets["email"]["sender_password"]
-    subject = "【ハコビテ】ご予約ありがとうございます"
-    body = f"""
+    
+    # -------------------------------------------------
+    # 1通目：お客様へのメール
+    # -------------------------------------------------
+    subject_user = "【ハコビテ】ご予約ありがとうございます"
+    body_user = f"""
 {name} 様
 
 この度は「ハコビテ」をご予約いただき、誠にありがとうございます。
@@ -237,20 +241,38 @@ def send_confirmation_email(to_email, name, booking_details):
 介護タクシー・生活支援 ハコビテ
 電話: 080-4950-6821
 """
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = sender_email
-    msg["To"] = to_email
-    
-    # ★修正ポイント：自分宛てに+adminをつけて送信（受信トレイに届くようにする）
-    bcc_address = sender_email.replace("@", "+admin@") 
-    msg["Bcc"] = bcc_address
+    msg_user = MIMEText(body_user)
+    msg_user["Subject"] = subject_user
+    msg_user["From"] = sender_email
+    msg_user["To"] = to_email
+
+    # -------------------------------------------------
+    # 2通目：管理者（林様）への通知メール（件名を変える！）
+    # -------------------------------------------------
+    subject_admin = f"【管理者通知】{name}様から予約がありました"
+    body_admin = f"""
+管理者 様
+
+新しい予約が入りました。カレンダーを確認してください。
+
+--------------------------------------------------
+{booking_details}
+--------------------------------------------------
+"""
+    msg_admin = MIMEText(body_admin)
+    msg_admin["Subject"] = subject_admin
+    msg_admin["From"] = sender_email
+    msg_admin["To"] = sender_email  # 管理者自身に送る
 
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
         server.login(sender_email, sender_password)
-        server.send_message(msg)
+        
+        # 連続発射
+        server.send_message(msg_user)  # お客様へ
+        server.send_message(msg_admin) # 林様へ
+        
         server.quit()
         return True
     except Exception as e:
