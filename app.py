@@ -2,6 +2,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 import datetime
 import smtplib
+import json
+import urllib.request
 from email.mime.text import MIMEText
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -39,8 +41,6 @@ h1, h2, h3, h4, h5, h6, .stTextInput > label, .stTextArea > label, .stSelectbox 
     color: #006400 !important;
     font-family: "Helvetica Neue", Arial, sans-serif;
 }
-
-/* 2. ボタンデザイン（通常） */
 div.stButton > button {
     width: 100%;
     border-radius: 8px;
@@ -54,8 +54,6 @@ div.stButton > button:hover {
     background-color: #006400;
     color: white;
 }
-
-/* 3. 予約確定ボタン */
 [data-testid="stForm"] button {
     background-color: #FF8C00 !important;
     color: white !important;
@@ -64,8 +62,6 @@ div.stButton > button:hover {
 [data-testid="stForm"] button:hover {
     background-color: #E07B00 !important;
 }
-
-/* 4. 入力フォーム白背景 */
 .stTextInput > div > div > input, 
 .stTextArea > div > div > textarea, 
 .stSelectbox > div > div > div {
@@ -76,8 +72,6 @@ div.stButton > button:hover {
     content: " *";
     color: #FF8C00;
 }
-
-/* 5. 案内文のデザイン */
 .mobile-notice {
     background-color: #E8F5E9;
     border: 1px solid #006400;
@@ -89,8 +83,6 @@ div.stButton > button:hover {
     margin-bottom: 15px;
     font-weight: bold;
 }
-
-/* 6. ドロップダウン・入力欄のダークモード対策 */
 div[data-baseweb="select"] > div {
     background-color: #FFFFFF !important;
     color: #333333 !important;
@@ -113,8 +105,6 @@ li[role="option"]:hover, li[role="option"][aria-selected="true"] {
 .stRadio label p {
     color: #333333 !important;
 }
-
-/* 7. ラジオボタンの緑色設定 */
 div[role="radiogroup"] > label > div:first-child {
     border-color: #009688 !important;
     background-color: #009688 !important;
@@ -122,8 +112,6 @@ div[role="radiogroup"] > label > div:first-child {
 div[role="radiogroup"] > label > div:first-child > div {
     border-color: #009688 !important;
 }
-
-/* スマホ対策 */
 @media (max-width: 640px) {
     .block-container {
         padding-left: 0.5rem !important;
@@ -216,17 +204,43 @@ def add_event(summary, start_dt, end_dt, description=""):
     }
     service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
 
-# ★ここを大改造：メールを2回に分けて送信する「ダブル送信」仕様
+# ★LINE通知機能（ここが新機能！）
+def send_line_notification(message):
+    if "line" not in st.secrets: return False
+    
+    url = "https://api.line.me/v2/bot/message/push"
+    token = st.secrets["line"]["channel_access_token"]
+    user_id = st.secrets["line"]["user_id"]
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
+    data = {
+        "to": user_id,
+        "messages": [{"type": "text", "text": message}]
+    }
+    
+    try:
+        req = urllib.request.Request(
+            url, 
+            data=json.dumps(data).encode("utf-8"), 
+            headers=headers, 
+            method="POST"
+        )
+        with urllib.request.urlopen(req) as res:
+            return True
+    except Exception as e:
+        st.error(f"LINE送信エラー: {e}")
+        return False
+
+# メール送信機能（お客様用のみ）
 def send_confirmation_email(to_email, name, booking_details):
     if "email" not in st.secrets: return False
     sender_email = st.secrets["email"]["sender_address"] 
     sender_password = st.secrets["email"]["sender_password"]
-    
-    # -------------------------------------------------
-    # 1通目：お客様へのメール
-    # -------------------------------------------------
-    subject_user = "【ハコビテ】ご予約ありがとうございます"
-    body_user = f"""
+    subject = "【ハコビテ】ご予約ありがとうございます"
+    body = f"""
 {name} 様
 
 この度は「ハコビテ」をご予約いただき、誠にありがとうございます。
@@ -241,38 +255,16 @@ def send_confirmation_email(to_email, name, booking_details):
 介護タクシー・生活支援 ハコビテ
 電話: 080-4950-6821
 """
-    msg_user = MIMEText(body_user)
-    msg_user["Subject"] = subject_user
-    msg_user["From"] = sender_email
-    msg_user["To"] = to_email
-
-    # -------------------------------------------------
-    # 2通目：管理者（林様）への通知メール（件名を変える！）
-    # -------------------------------------------------
-    subject_admin = f"【管理者通知】{name}様から予約がありました"
-    body_admin = f"""
-管理者 様
-
-新しい予約が入りました。カレンダーを確認してください。
-
---------------------------------------------------
-{booking_details}
---------------------------------------------------
-"""
-    msg_admin = MIMEText(body_admin)
-    msg_admin["Subject"] = subject_admin
-    msg_admin["From"] = sender_email
-    msg_admin["To"] = sender_email  # 管理者自身に送る
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = sender_email
+    msg["To"] = to_email
 
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
         server.login(sender_email, sender_password)
-        
-        # 連続発射
-        server.send_message(msg_user)  # お客様へ
-        server.send_message(msg_admin) # 林様へ
-        
+        server.send_message(msg)
         server.quit()
         return True
     except Exception as e:
@@ -379,7 +371,6 @@ if st.session_state.page == 'calendar':
 # ページ2: 予約詳細入力フォーム（または完了画面）
 # ---------------------------------------------------------
 elif st.session_state.page == 'booking':
-    # スクロールリセット
     components.html(
         """
             <script>
@@ -398,6 +389,8 @@ elif st.session_state.page == 'booking':
 
     if st.session_state.booking_success:
         st.success("予約が完了しました！")
+        # LINE通知成功メッセージ（管理者には通知済み）
+        st.info("管理者へ通知を送信しました。") 
         st.balloons()
         
         st.markdown("""
@@ -518,9 +511,17 @@ elif st.session_state.page == 'booking':
                         summary = f"【予約】{name}様 ({selected_duration}) - {service_type}"
                         try:
                             with st.spinner('予約処理中...'):
+                                # 1. カレンダーに予定を入れる
                                 add_event(summary, start_dt, end_dt, details_text)
+                                
+                                # 2. お客様へメール送信
                                 if email:
                                     send_confirmation_email(email, name, details_text)
+                                
+                                # 3. ★管理者（林様）へLINE通知を飛ばす！
+                                line_msg = f"🔔 新しい予約が入りました！\n\n{summary}\n\n{details_text}"
+                                send_line_notification(line_msg)
+                                
                                 st.session_state.booking_success = True
                                 st.rerun()
                         except Exception as e:
