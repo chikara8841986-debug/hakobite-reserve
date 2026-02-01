@@ -254,7 +254,10 @@ def send_confirmation_email(to_email, name, booking_details):
     msg["Subject"] = subject
     msg["From"] = sender_email
     msg["To"] = to_email
-    msg["Bcc"] = sender_email  # ★ここを追加しました（管理者にもBCCで送信）
+    
+    # 【ここが修正ポイント】自分宛てに「+admin」をつけてBCCで送る
+    bcc_address = sender_email.replace("@", "+admin@") 
+    msg["Bcc"] = bcc_address 
 
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
@@ -266,7 +269,6 @@ def send_confirmation_email(to_email, name, booking_details):
     except Exception as e:
         st.error(f"メール送信エラー: {e}")
         return False
-
 # ---------------------------------------------------------
 # メイン処理
 # ---------------------------------------------------------
