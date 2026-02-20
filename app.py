@@ -72,17 +72,6 @@ div.stButton > button:hover {
     content: " *";
     color: #FF8C00;
 }
-.mobile-notice {
-    background-color: #E8F5E9;
-    border: 1px solid #006400;
-    color: #006400;
-    padding: 10px;
-    border-radius: 5px;
-    font-size: 0.9em;
-    text-align: center;
-    margin-bottom: 15px;
-    font-weight: bold;
-}
 div[data-baseweb="select"] > div {
     background-color: #FFFFFF !important;
     color: #333333 !important;
@@ -112,33 +101,104 @@ div[role="radiogroup"] > label > div:first-child {
 div[role="radiogroup"] > label > div:first-child > div {
     border-color: #009688 !important;
 }
-@media (max-width: 640px) {
-    .block-container {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) {
-        display: flex !important;
-        flex-direction: row !important;
-        overflow-x: auto !important;
-        flex-wrap: nowrap !important;
-        gap: 5px !important;
-        padding-bottom: 10px !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) > div[data-testid="column"] {
-        min-width: 60px !important;
-        flex: 0 0 auto !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(div[data-testid="column"]:nth-child(7)) button {
-        padding: 0 !important;
-        font-size: 0.7rem !important;
-        height: auto !important;
-        min-height: 35px !important;
-    }
-    .calendar-header {
-        font-size: 0.7rem !important;
-        white-space: nowrap !important;
-    }
+
+/* ===== 予約テーブル専用スタイル ===== */
+.booking-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+.booking-table {
+    border-collapse: collapse;
+    min-width: 520px;
+    width: 100%;
+    background: #fff;
+    font-size: 0.82em;
+}
+.booking-table th {
+    background-color: #E8F5E9;
+    color: #006400;
+    border: 1px solid #ccc;
+    padding: 6px 4px;
+    text-align: center;
+    white-space: nowrap;
+    font-weight: bold;
+}
+.booking-table th.time-header {
+    background-color: #006400;
+    color: white;
+    min-width: 52px;
+    position: sticky;
+    left: 0;
+    z-index: 3;
+}
+.booking-table td {
+    border: 1px solid #ddd;
+    padding: 3px 4px;
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.booking-table td.time-col {
+    position: sticky;
+    left: 0;
+    background-color: #f9f9f9;
+    color: #555;
+    font-size: 0.85em;
+    font-weight: bold;
+    z-index: 2;
+    min-width: 52px;
+    border-right: 2px solid #ccc;
+}
+.booking-table td.available {
+    background-color: #fff0f5;
+}
+.booking-table td.available a {
+    color: #e0004e;
+    text-decoration: none;
+    font-size: 1.3em;
+    font-weight: bold;
+    display: block;
+    padding: 2px 0;
+}
+.booking-table td.available a:hover {
+    color: #ff6699;
+}
+.booking-table td.booked {
+    background-color: #f8f8f8;
+    color: #bbb;
+    font-size: 1.1em;
+}
+.booking-table td.past {
+    background-color: #f0f0f0;
+    color: #ccc;
+    font-size: 1.1em;
+}
+.booking-table tr:nth-child(even) td.time-col {
+    background-color: #f3f3f3;
+}
+.legend-box {
+    display: flex;
+    gap: 18px;
+    font-size: 0.85em;
+    color: #555;
+    margin: 8px 0 12px 0;
+    align-items: center;
+}
+.legend-circle { color: #e0004e; font-weight: bold; font-size: 1.1em; }
+.legend-x { color: #bbb; font-size: 1.1em; }
+.nav-info {
+    background-color: #E8F5E9;
+    border: 1px solid #006400;
+    color: #006400;
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 0.88em;
+    text-align: center;
+    margin-bottom: 12px;
+    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -204,14 +264,11 @@ def add_event(summary, start_dt, end_dt, description=""):
     }
     service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
 
-# ★LINE通知機能（ここが新機能！）
 def send_line_notification(message):
     if "line" not in st.secrets: return False
-    
     url = "https://api.line.me/v2/bot/message/push"
     token = st.secrets["line"]["channel_access_token"]
     user_id = st.secrets["line"]["user_id"]
-    
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}"
@@ -220,7 +277,6 @@ def send_line_notification(message):
         "to": user_id,
         "messages": [{"type": "text", "text": message}]
     }
-    
     try:
         req = urllib.request.Request(
             url, 
@@ -234,7 +290,6 @@ def send_line_notification(message):
         st.error(f"LINE送信エラー: {e}")
         return False
 
-# メール送信機能（お客様用のみ）
 def send_confirmation_email(to_email, name, booking_details):
     if "email" not in st.secrets: return False
     sender_email = st.secrets["email"]["sender_address"] 
@@ -259,7 +314,6 @@ def send_confirmation_email(to_email, name, booking_details):
     msg["Subject"] = subject
     msg["From"] = sender_email
     msg["To"] = to_email
-
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
@@ -276,6 +330,17 @@ def send_confirmation_email(to_email, name, booking_details):
 # ---------------------------------------------------------
 today = datetime.date.today()
 
+# ★ クエリパラメータで予約スロットが渡された場合は予約ページへ遷移
+if "slot" in st.query_params:
+    try:
+        slot_str = st.query_params["slot"]
+        slot_dt = datetime.datetime.fromisoformat(slot_str)
+        st.query_params.clear()
+        to_booking(slot_dt)
+        st.rerun()
+    except Exception:
+        st.query_params.clear()
+
 if 'current_date' not in st.session_state:
     st.session_state.current_date = today 
 if 'selected_slot' not in st.session_state:
@@ -286,14 +351,15 @@ if 'booking_success' not in st.session_state:
     st.session_state.booking_success = False
 
 # ---------------------------------------------------------
-# ページ1: カレンダー画面
+# ページ1: カレンダー画面（テーブル形式）
 # ---------------------------------------------------------
 if st.session_state.page == 'calendar':
     st.markdown("<h1 style='text-align: center;'>ハコビテ 予約フォーム</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #555;'>丸亀・善通寺の介護タクシー＆生活支援</p>", unsafe_allow_html=True)
 
+    # --- ナビゲーション ---
+    max_future_date = today + datetime.timedelta(days=60)
     col_nav1, col_nav2, col_nav3 = st.columns([1, 4, 1])
-    max_future_date = today + datetime.timedelta(days=60) 
 
     with col_nav1:
         if st.session_state.current_date > today:
@@ -306,66 +372,111 @@ if st.session_state.page == 'calendar':
             st.button("← 前の週", key="prev_week_dis", disabled=True, use_container_width=True)
 
     with col_nav3:
-        if st.session_state.current_date < max_future_date:
+        if st.session_state.current_date + datetime.timedelta(days=7) <= max_future_date:
             if st.button("次の週 →", key="next_week", use_container_width=True):
                 st.session_state.current_date += datetime.timedelta(days=7)
                 st.rerun()
         else:
             st.button("次の週 →", key="next_week_dis", disabled=True, use_container_width=True)
 
+    # 表示する7日間を計算
     start_display_date = st.session_state.current_date
     week_dates = [start_display_date + datetime.timedelta(days=i) for i in range(7)]
     week_label_start = start_display_date.strftime('%m/%d')
     week_label_end = week_dates[-1].strftime('%m/%d')
 
     with col_nav2:
-        st.markdown(f"<h3 style='text-align: center;'>{week_label_start} ～ {week_label_end} の空き状況</h3>", unsafe_allow_html=True)
-        st.markdown("""
-        <div class="mobile-notice">
-        💡 スマートフォンでご覧の方は、画面を横向きにすると全日程が見やすくなります。
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f"<h3 style='text-align: center;'>{week_label_start} ～ {week_label_end} の空き状況</h3>",
+            unsafe_allow_html=True
+        )
 
+    # スマホ向け案内
+    st.markdown(
+        '<div class="nav-info">📱 スマートフォンの方は表を左右にスクロールできます</div>',
+        unsafe_allow_html=True
+    )
+
+    # 凡例
+    st.markdown(
+        '<div class="legend-box">'
+        '<span class="legend-circle">○</span> 予約できます&nbsp;&nbsp;'
+        '<span class="legend-x">×</span> 予約不可・満席'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    # カレンダーデータ取得
     existing_events = get_events(week_dates[0], week_dates[-1])
+
+    # 時間スロット生成（8:00〜18:30、30分刻み）
     times = []
-    for h in range(8, 19): 
+    for h in range(8, 19):
         times.append(datetime.time(hour=h, minute=0))
         if h < 18:
             times.append(datetime.time(hour=h, minute=30))
 
     weekdays_ja = ["月", "火", "水", "木", "金", "土", "日"]
-    cols = st.columns(7)
-    
-    for i, col in enumerate(cols):
-        target_date = week_dates[i]
-        day_str = weekdays_ja[target_date.weekday()]
-        
-        with col:
-            st.markdown(f"<div class='calendar-header' style='text-align:center; font-weight:bold; color:#006400; border-bottom:2px solid #FF8C00; margin-bottom:5px;'>{target_date.month}/{target_date.day}<br>({day_str})</div>", unsafe_allow_html=True)
-            
-            for time in times:
-                slot_start = datetime.datetime.combine(target_date, time).replace(tzinfo=JST)
-                slot_end = slot_start + datetime.timedelta(minutes=30)
-                is_past = slot_start < datetime.datetime.now(JST)
-                
-                is_booked = False
-                for event in existing_events:
-                    start_str = event['start'].get('dateTime')
-                    end_str = event['end'].get('dateTime')
-                    if start_str and end_str:
-                        event_start = datetime.datetime.fromisoformat(start_str).astimezone(JST)
-                        event_end = datetime.datetime.fromisoformat(end_str).astimezone(JST)
-                        if event_end > slot_start and event_start < slot_end:
-                            is_booked = True
-                            break
-                
-                btn_key = f"{target_date}_{time}"
-                
-                if is_booked or is_past:
-                    st.button("✕", key=f"dis_{btn_key}", disabled=True, use_container_width=True)
-                else:
-                    label = f"{time.hour}:{time.minute:02d}"
-                    st.button(label, key=f"btn_{btn_key}", use_container_width=True, on_click=to_booking, args=(datetime.datetime.combine(target_date, time),))
+
+    # --- HTMLテーブルを生成 ---
+    html = ['<div class="booking-table-wrapper"><table class="booking-table">']
+
+    # ヘッダー行：時間列＋各日付
+    html.append('<thead><tr>')
+    html.append('<th class="time-header">時間</th>')
+    for d in week_dates:
+        day_str = weekdays_ja[d.weekday()]
+        color = ""
+        if d.weekday() == 5:   # 土
+            color = "color:#1a6bcc;"
+        elif d.weekday() == 6: # 日
+            color = "color:#cc1a1a;"
+        html.append(
+            f'<th style="{color}">{d.month}/{d.day}<br>({day_str})</th>'
+        )
+    html.append('</tr></thead>')
+
+    # データ行：各時間 × 各日付
+    html.append('<tbody>')
+    now_jst = datetime.datetime.now(JST)
+
+    for time in times:
+        html.append('<tr>')
+        html.append(f'<td class="time-col">{time.hour}:{time.minute:02d}</td>')
+
+        for d in week_dates:
+            slot_start = datetime.datetime.combine(d, time).replace(tzinfo=JST)
+            slot_end   = slot_start + datetime.timedelta(minutes=30)
+            is_past    = slot_start < now_jst
+
+            # 予約済み判定
+            is_booked = False
+            for event in existing_events:
+                start_str = event['start'].get('dateTime')
+                end_str   = event['end'].get('dateTime')
+                if start_str and end_str:
+                    ev_start = datetime.datetime.fromisoformat(start_str).astimezone(JST)
+                    ev_end   = datetime.datetime.fromisoformat(end_str).astimezone(JST)
+                    if ev_end > slot_start and ev_start < slot_end:
+                        is_booked = True
+                        break
+
+            if is_past:
+                html.append('<td class="past">×</td>')
+            elif is_booked:
+                html.append('<td class="booked">×</td>')
+            else:
+                # ○ をクリックするとクエリパラメータ経由で予約ページへ
+                slot_iso = slot_start.strftime('%Y-%m-%dT%H:%M:%S')
+                html.append(
+                    f'<td class="available"><a href="?slot={slot_iso}">○</a></td>'
+                )
+
+        html.append('</tr>')
+
+    html.append('</tbody></table></div>')
+
+    st.markdown('\n'.join(html), unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # ページ2: 予約詳細入力フォーム（または完了画面）
@@ -389,7 +500,6 @@ elif st.session_state.page == 'booking':
 
     if st.session_state.booking_success:
         st.success("予約が完了しました！")
-        # LINE通知成功メッセージ（管理者には通知済み）
         st.info("管理者へ通知を送信しました。") 
         st.balloons()
         
@@ -511,17 +621,11 @@ elif st.session_state.page == 'booking':
                         summary = f"【予約】{name}様 ({selected_duration}) - {service_type}"
                         try:
                             with st.spinner('予約処理中...'):
-                                # 1. カレンダーに予定を入れる
                                 add_event(summary, start_dt, end_dt, details_text)
-                                
-                                # 2. お客様へメール送信
                                 if email:
                                     send_confirmation_email(email, name, details_text)
-                                
-                                # 3. ★管理者（林様）へLINE通知を飛ばす！
                                 line_msg = f"🔔 新しい予約が入りました！\n\n{summary}\n\n{details_text}"
                                 send_line_notification(line_msg)
-                                
                                 st.session_state.booking_success = True
                                 st.rerun()
                         except Exception as e:
