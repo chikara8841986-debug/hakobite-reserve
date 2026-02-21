@@ -9,13 +9,11 @@ JST = datetime.timezone(datetime.timedelta(hours=9))
 
 def get_service():
     try:
-        # Vercelの環境変数に保存したJSONを読み込む設定
         info = json.loads(os.environ.get("GCP_SERVICE_ACCOUNT_JSON", "{}"))
         creds = service_account.Credentials.from_service_account_info(
-            info, 
-            scopes=['https://www.googleapis.com/auth/calendar']
+            info, scopes=['https://www.googleapis.com/auth/calendar']
         )
-        # cache_discovery=False を追加し、Vercel環境でのファイル書き込みエラーを回避
+        # cache_discovery=FalseでVercelのエラーを回避
         return build('calendar', 'v3', credentials=creds, cache_discovery=False)
     except Exception as e:
         print(f"Credentials Error: {e}")
@@ -28,7 +26,6 @@ def get_slots():
         start = request.args.get('start')
         end = request.args.get('end')
         
-        # パラメータ指定がない場合は現在時刻から60日分を取得
         if start and end:
             t_min = f"{start}T00:00:00+09:00"
             t_max = f"{end}T23:59:59+09:00"
@@ -38,24 +35,23 @@ def get_slots():
             t_max = (now + datetime.timedelta(days=60)).isoformat()
 
         events_result = service.events().list(
-            calendarId=os.environ.get("CALENDAR_ID"), 
-            timeMin=t_min, 
-            timeMax=t_max, 
-            singleEvents=True,
-            orderBy='startTime'
+            calendarId=os.environ.get("CALENDAR_ID", "chikara8841986@gmail.com"), 
+            timeMin=t_min, timeMax=t_max, singleEvents=True, orderBy='startTime'
         ).execute()
         
         events = events_result.get('items', [])
         
-        # フロントエンドの照合用（includes）にUTCのISO文字列配列に変換して返す
         busy_slots = []
         for event in events:
             start_time = event['start'].get('dateTime')
-            if start_time:
-                # タイムゾーン情報を考慮してパース
-                dt = datetime.datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-                utc_iso = dt.astimezone(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
-                busy_slots.append(utc_iso)
+            end_time = event['end'].get('dateTime')
+            if start_time and end_time:
+                dt_s = datetime.datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                dt_e = datetime.datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                utc_s = dt_s.astimezone(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+                utc_e = dt_e.astimezone(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+                # 終了時刻もフロントに返し、正確な「×」判定を行う
+                busy_slots.append({"start": utc_s, "end": utc_e})
 
         return jsonify(busy_slots)
 
@@ -65,7 +61,69 @@ def get_slots():
 
 @app.route('/api/reserve', methods=['POST'])
 def reserve():
-    data = request.json
-    # ここに予約実行、LINE通知、メール送信のロジックを記述
+    try:
+        data = request.json
+        start_str = data.get('start')
+        duration_minutes = data.get('duration_minutes', 30)
+        summary = data.get('summary', '予約')
+        description = data.get('description', '')
+        name = data.get('name', 'お客様')
+        to_email = data.get('email', '')
 
-    return jsonify({"status": "success"})
+        service = get_service()
+        start_dt = datetime.datetime.fromisoformat(start_str.replace('Z', '+00:00')).astimezone(JST)
+        end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
+
+        # カレンダーへ予定を追加
+        event = {
+            'summary': summary,
+            'description': description,
+            'start': {'dateTime': start_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
+            'end': {'dateTime': end_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
+        }
+        calendar_id = os.environ.get("CALENDAR_ID", "chikara8841986@gmail.com")
+        service.events().insert(calendarId=calendar_id, body=event).execute()
+
+        # LINE通知
+        line_token = os.environ.get("LINE_TOKEN")
+        line_user_id = os.environ.get("LINE_USER_ID")
+        if line_token and line_user_id:
+            url = "https://api.line.me/v2/bot/message/push"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {line_token}"
+            }
+            payload = {
+                "to": line_user_id,
+                "messages": [{"type": "text", "text": f"🔔 新しい予約が入りました！\n\n{summary}\n\n{description}"}]
+            }
+            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+            try:
+                with urllib.request.urlopen(req) as res:
+                    pass
+            except Exception as e:
+                print(f"LINE Error: {e}")
+
+        # 確認メール送信
+        sender_email = os.environ.get("EMAIL_ADDRESS")
+        sender_password = os.environ.get("EMAIL_PASSWORD")
+        if to_email and sender_email and sender_password:
+            subject = "【ハコビテ】ご予約ありがとうございます"
+            body = f"{name} 様\n\nこの度は「ハコビテ」をご予約いただき、誠にありがとうございます。\n以下の内容でご予約を承りました。\n\n--------------------------------------------------\n{description}\n--------------------------------------------------\n\nご不明な点がございましたら、お気軽にご連絡ください。\n\n介護タクシー・生活支援 ハコビテ\n電話: 080-4950-6821"
+            msg = MIMEText(body)
+            msg["Subject"] = subject
+            msg["From"] = sender_email
+            msg["To"] = to_email
+            try:
+                server = smtplib.SMTP("smtp.gmail.com", 587)
+                server.starttls()
+                server.login(sender_email, sender_password)
+                server.send_message(msg)
+                server.quit()
+            except Exception as e:
+                print(f"Email Error: {e}")
+
+        return jsonify({"status": "success"})
+    except Exception as e:
+        print(f"Reserve API Error: {e}")
+        return jsonify({"error": str(e)}), 500
