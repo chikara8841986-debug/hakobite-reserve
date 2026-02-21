@@ -7,19 +7,20 @@ const FARE_CONFIG = {
 };
 
 export default function HakobiteApp() {
+  // 状態管理：ページ切り替え、計算、予約データ
+  const [view, setView] = useState("main"); // "main" or "booking" or "success"
   const [tripKm, setTripKm] = useState("");
-  const [isNight, setIsNight] = useState(false);
-  const [needsCare, setNeedsCare] = useState(false);
-  const [wheelchairType, setWheelchairType] = useState("none");
-  const [nights, setNights] = useState("0");
   const [result, setResult] = useState(null);
-
-  // 予約システム用の状態
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [bookingData, setBookingData] = useState({
+    name: "", tel: "", email: "", service: "介護タクシー（保険外）外出支援",
+    duration: "30分", from: "", to: "", wheelchair: "利用なし", care: "見守りのみ",
+    passengers: "１名のみ", samePerson: "はい", payment: "現金", note: ""
+  });
   const [selectedSlot, setSelectedSlot] = useState(null);
 
-  // カレンダー情報の取得（VercelのPython APIを叩く）
+  // カレンダー情報の取得
   useEffect(() => {
     async function fetchSlots() {
       try {
@@ -28,77 +29,113 @@ export default function HakobiteApp() {
         const res = await fetch(`/api/slots?start=${start}&end=${end}`);
         const data = await res.json();
         setSlots(data);
-      } catch (e) {
-        console.error("カレンダー取得失敗", e);
-      } finally {
-        setLoading(false);
-      }
+      } catch (e) { console.error("取得失敗", e); }
+      finally { setLoading(false); }
     }
-    fetchSlots();
-  }, []);
+    if (view === "main") fetchSlots();
+  }, [view]);
 
+  // 料金計算ロジック
   const calculate = () => {
     const dist = parseFloat(tripKm) || 0;
-    if (dist <= 0) return alert("走行距離を入力してください。");
+    if (dist <= 0) return alert("距離を入力してください");
     const units = Math.ceil(dist / FARE_CONFIG.meterDistance);
     let meter = FARE_CONFIG.baseFare + (units * FARE_CONFIG.meterFare);
-    if (isNight) meter = Math.ceil(meter * FARE_CONFIG.nightSurcharge / 10) * 10;
-    const body = needsCare ? FARE_CONFIG.careFee : 0;
-    const n = parseInt(nights) || 0;
-    let wc = 0;
-    if (n >= 1) {
-      if (wheelchairType === "normal") wc = FARE_CONFIG.wheelchair.normal * n;
-      if (wheelchairType === "reclining") wc = FARE_CONFIG.wheelchair.reclining * n;
-    }
-    setResult({ meter, fukushi: FARE_CONFIG.welfareFee, body, wc, total: meter + FARE_CONFIG.welfareFee + body + wc, dist, n });
+    setResult({ total: meter + FARE_CONFIG.welfareFee }); // 簡易表示
   };
 
-  const C = {
-    green: "#5b8c3e", greenLight: "#6fa34a", greenBg: "#eef5e6",
-    orange: "#e88634", orangeBg: "#fef5eb", cream: "#faf7f2",
-    cardBg: "#ffffff", border: "#e5ddd2", text: "#333333"
+  // 予約実行
+  const handleReserve = async (e) => {
+    e.preventDefault();
+    const startDt = new Date(selectedSlot);
+    const endDt = new Date(startDt.getTime() + 30 * 60000); // 30分後
+    const payload = {
+      summary: `【予約】${bookingData.name}様 (${bookingData.service})`,
+      details: `名前: ${bookingData.name}\n電話: ${bookingData.tel}\nサービス: ${bookingData.service}\n場所: ${bookingData.from} → ${bookingData.to}\n車椅子: ${bookingData.wheelchair}\n備考: ${bookingData.note}`,
+      start: startDt.toISOString(),
+      end: endDt.toISOString(),
+      email: bookingData.email,
+      name: bookingData.name
+    };
+
+    const res = await fetch('/api/reserve', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) setView("success");
+    else alert("送信に失敗しました");
   };
 
-  const base = { boxSizing: "border-box" };
+  // デザイン定義
+  const C = { green: "#5b8c3e", orange: "#e88634", cream: "#faf7f2", white: "#fff", text: "#333" };
 
+  // --- UI: 完了画面 ---
+  if (view === "success") {
+    return (
+      <div style={{ padding: "40px 20px", textAlign: "center", background: C.cream, minHeight: "100vh" }}>
+        <h2 style={{ color: C.green }}>✅ 予約が完了しました！</h2>
+        <p>確認メールをお送りしましたのでご確認ください。</p>
+        <button onClick={() => setView("main")} style={{ padding: "12px 24px", background: C.green, color: "#fff", border: "none", borderRadius: "8px" }}>トップへ戻る</button>
+      </div>
+    );
+  }
+
+  // --- UI: 入力フォーム画面 ---
+  if (view === "booking") {
+    return (
+      <div style={{ padding: "20px", background: C.cream, minHeight: "100vh" }}>
+        <button onClick={() => setView("main")} style={{ marginBottom: "20px", border: "none", background: "none", color: C.green }}>← カレンダーに戻る</button>
+        <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: `1px solid ${C.green}` }}>
+          <h3>📝 予約情報の入力</h3>
+          <p style={{ fontWeight: "bold", color: C.orange }}>日時: {new Date(selectedSlot).toLocaleString()}</p>
+          <form onSubmit={handleReserve}>
+            <label>お名前 *</label>
+            <input type="text" required style={{ width: "100%", padding: "10px", marginBottom: "12px" }} value={bookingData.name} onChange={e => setBookingData({...bookingData, name: e.target.value})} />
+            <label>電話番号 *</label>
+            <input type="tel" required style={{ width: "100%", padding: "10px", marginBottom: "12px" }} value={bookingData.tel} onChange={e => setBookingData({...bookingData, tel: e.target.value})} />
+            <label>お迎え場所 *</label>
+            <textarea required style={{ width: "100%", padding: "10px", marginBottom: "12px" }} value={bookingData.from} onChange={e => setBookingData({...bookingData, from: e.target.value})} />
+            <button type="submit" style={{ width: "100%", padding: "16px", background: C.orange, color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold" }}>予約を確定する</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // --- UI: メイン画面（シミュレーター + カレンダー） ---
   return (
-    <div style={{ ...base, minHeight: "100vh", background: C.cream, fontFamily: "sans-serif", color: C.text, width: "100%", margin: 0, padding: 0 }}>
-      <style>{`
-        body, html, #root { margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: none !important; display: block !important; }
-        .slot-btn { width: 100%; padding: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; border-radius: 4px; }
-        .slot-booked { background: #eee; color: #bbb; cursor: not-allowed; }
-      `}</style>
-
-      <div style={{ ...base, background: `linear-gradient(135deg, ${C.green}, ${C.greenLight})`, padding: "24px 16px", textAlign: "center", color: "#fff", width: "100%" }}>
-        <h1 style={{ margin: 0, fontSize: "20px" }}>🚕 ハコビテ 総合システム</h1>
+    <div style={{ background: C.cream, minHeight: "100vh", fontFamily: "sans-serif" }}>
+      <div style={{ background: C.green, padding: "20px", color: "#fff", textAlign: "center" }}>
+        <h1 style={{ margin: 0, fontSize: "1.2rem" }}>🚕 ハコビテ 総合予約システム</h1>
       </div>
 
-      <div style={{ ...base, maxWidth: "600px", width: "100%", margin: "0 auto", padding: "16px" }}>
-        {/* --- 料金シミュレーターセクション --- */}
-        <h2 style={{ fontSize: "16px", color: C.green }}>🧮 概算料金を計算する</h2>
-        <div style={{ ...base, background: C.cardBg, padding: "20px", borderRadius: "12px", border: `1px solid ${C.border}`, marginBottom: "24px" }}>
-           <label style={{ fontSize: "14px", fontWeight: "bold" }}>走行距離 (km)</label>
-           <input type="number" step="0.1" value={tripKm} onChange={e => setTripKm(e.target.value)} style={{ width: "100%", padding: "12px", marginTop: "8px" }} />
-           <button onClick={calculate} style={{ width: "100%", padding: "16px", background: C.green, color: "#fff", border: "none", borderRadius: "10px", marginTop: "16px", fontWeight: "bold" }}>計算する</button>
-           {result && <div style={{ marginTop: "16px", fontSize: "24px", fontWeight: "bold", textAlign: "center", color: C.green }}>¥{result.total.toLocaleString()}</div>}
-        </div>
+      <div style={{ maxWidth: "600px", margin: "0 auto", padding: "20px" }}>
+        {/* シミュレーター */}
+        <section style={{ background: "#fff", padding: "20px", borderRadius: "12px", marginBottom: "20px" }}>
+          <h2 style={{ fontSize: "1rem", color: C.green }}>🧮 料金シミュレーター</h2>
+          <input type="number" placeholder="距離 (km)" style={{ width: "100%", padding: "12px", marginBottom: "10px" }} value={tripKm} onChange={e => setTripKm(e.target.value)} />
+          <button onClick={calculate} style={{ width: "100%", padding: "12px", background: C.green, color: "#fff", border: "none", borderRadius: "8px" }}>計算</button>
+          {result && <p style={{ textAlign: "center", fontSize: "1.5rem", fontWeight: "bold", color: C.green }}>¥{result.total.toLocaleString()}</p>}
+        </section>
 
-        {/* --- 予約カレンダーセクション --- */}
-        <h2 style={{ fontSize: "16px", color: C.green }}>📅 空き状況の確認・予約</h2>
-        <div style={{ ...base, background: C.cardBg, padding: "20px", borderRadius: "12px", border: `1px solid ${C.border}` }}>
-          {loading ? <p>カレンダーを読み込み中...</p> : (
-            <div>
-              <p style={{ fontSize: "12px", color: "#666" }}>※○印をタップすると詳細入力に進みます</p>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
-                {/* 簡易的なスロット表示例 */}
-                {["09:00", "11:00", "13:00", "15:00"].map(time => (
-                  <button key={time} className="slot-btn">○ {time}</button>
-                ))}
-              </div>
-              <p style={{ marginTop: "16px", fontSize: "12px" }}>実際にはここに1週間の詳細な○×表が表示されます。</p>
+        {/* カレンダー */}
+        <section style={{ background: "#fff", padding: "20px", borderRadius: "12px" }}>
+          <h2 style={{ fontSize: "1rem", color: C.green }}>📅 予約状況</h2>
+          {loading ? <p>読込中...</p> : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+              {["09:00", "10:00", "11:00", "13:00", "14:00", "15:00"].map(time => {
+                const now = new Date();
+                const slotDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(time), 0);
+                return (
+                  <button key={time} onClick={() => { setSelectedSlot(slotDate.toISOString()); setView("booking"); }}
+                    style={{ padding: "10px", border: `1px solid ${C.green}`, background: "#fff", borderRadius: "6px", cursor: "pointer" }}>
+                    ○ {time}
+                  </button>
+                );
+              })}
             </div>
           )}
-        </div>
+        </section>
       </div>
     </div>
   );
