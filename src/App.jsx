@@ -285,14 +285,29 @@ function ReservationSystem() {
     );
   }
 
-  // --- カレンダー（ホットペッパー風） ---
+// --- カレンダー ---
   const now = new Date();
   const yearMonth = `${wd[0].getFullYear()}年${wd[0].getMonth() + 1}月`;
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 0 30px", overflow: "hidden" }}>
+      {/* 案内バナー */}
+      <div style={{ padding: "8px 12px 0" }}>
+        <div style={{
+          background: C.orangeBg, border: `1px solid ${C.border}`, borderRadius: 10,
+          padding: "10px 14px", marginBottom: 6
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.orange, marginBottom: 4 }}>📱 電話不要！3分でかんたん予約</div>
+          <div style={{ fontSize: 11, color: C.textMid, lineHeight: 1.7 }}>
+            ① 空いている「<span style={{ color: C.pink, fontWeight: 700 }}>○</span>」をタップ<br />
+            ② お名前・行き先・介助内容などを入力<br />
+            ③ そのまま予約完了！
+          </div>
+        </div>
+      </div>
+
       {/* 週送りナビ */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px 0" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 12px 0" }}>
         <button onClick={() => setWOff(p => Math.max(0, p - 1))} disabled={wOff <= 0}
           style={{ padding: "7px 14px", border: `1px solid ${wOff <= 0 ? "#ddd" : "#ccc"}`, borderRadius: 6, background: C.white, color: wOff <= 0 ? "#bbb" : C.text, fontSize: 12, fontWeight: 600, cursor: wOff <= 0 ? "default" : "pointer" }}>
           ＜ 前の一週間
@@ -314,26 +329,21 @@ function ReservationSystem() {
               {wd.map((_, i) => <col key={i} />)}
             </colgroup>
             <thead>
-              {/* 年月 */}
               <tr>
-                <th style={{ border: `1px solid #e0e0e0`, background: "#fafafa", padding: 0 }} />
-                <th colSpan={7} style={{ border: `1px solid #e0e0e0`, background: "#fafafa", padding: "4px 0", fontSize: 11, fontWeight: 700, color: C.text }}>
+                <th style={{ border: "1px solid #e0e0e0", background: "#fafafa", padding: 0 }} />
+                <th colSpan={7} style={{ border: "1px solid #e0e0e0", background: "#fafafa", padding: "4px 0", fontSize: 11, fontWeight: 700, color: C.text }}>
                   {yearMonth}
                 </th>
               </tr>
-              {/* 日付ヘッダー */}
               <tr>
-                <th style={{ border: `1px solid #e0e0e0`, background: "#f5f5f5", padding: "6px 2px", fontSize: 10, color: C.textMid, fontWeight: 600 }}>日時</th>
+                <th style={{ border: "1px solid #e0e0e0", background: "#f5f5f5", padding: "6px 2px", fontSize: 10, color: C.textMid, fontWeight: 600 }}>日時</th>
                 {wd.map((d, i) => {
                   const dow = d.getDay();
-                  const isSun = dow === 0;
-                  const isSat = dow === 6;
-                  const bg = isSun ? C.pinkLight : isSat ? "#e3f2fd" : "#fafafa";
-                  const color = isSun ? C.pink : isSat ? "#1a6bcc" : C.text;
+                  const isSun = dow === 0, isSat = dow === 6;
                   return (
-                    <th key={i} style={{ border: `1px solid #e0e0e0`, background: bg, padding: "4px 0", textAlign: "center" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color }}>{d.getDate()}</div>
-                      <div style={{ fontSize: 9, color, fontWeight: 600 }}>({dn[dow]})</div>
+                    <th key={i} style={{ border: "1px solid #e0e0e0", background: isSun ? C.pinkLight : isSat ? "#e3f2fd" : "#fafafa", padding: "4px 0", textAlign: "center" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: isSun ? C.pink : isSat ? "#1a6bcc" : C.text }}>{d.getDate()}</div>
+                      <div style={{ fontSize: 9, color: isSun ? C.pink : isSat ? "#1a6bcc" : C.text, fontWeight: 600 }}>({dn[dow]})</div>
                     </th>
                   );
                 })}
@@ -342,7 +352,7 @@ function ReservationSystem() {
             <tbody>
               {ts.map((t, idx) => (
                 <tr key={idx}>
-                  <td style={{ border: `1px solid #e0e0e0`, background: "#fafafa", padding: "5px 2px", fontWeight: 700, fontSize: 11, color: C.text, textAlign: "center" }}>
+                  <td style={{ border: "1px solid #e0e0e0", background: "#fafafa", padding: "5px 2px", fontWeight: 700, fontSize: 11, color: C.text, textAlign: "center" }}>
                     {t.h}:{t.m.toString().padStart(2, "0")}
                   </td>
                   {wd.map((d, i) => {
@@ -354,17 +364,13 @@ function ReservationSystem() {
                     const baseBg = dow === 0 ? "#fff8fa" : dow === 6 ? "#f8fbff" : C.white;
 
                     if (isPast || isBusy) {
-                      return <td key={i} style={{ border: `1px solid #e0e0e0`, background: isPast ? "#f5f5f5" : baseBg, textAlign: "center", padding: "4px 0", color: "#ccc", fontSize: 12 }}>×</td>;
+                      return <td key={i} style={{ border: "1px solid #e0e0e0", background: isPast ? "#f5f5f5" : baseBg, textAlign: "center", padding: "4px 0", color: "#ccc", fontSize: 12 }}>×</td>;
                     }
                     return (
-                      <td key={i} style={{ border: `1px solid #e0e0e0`, background: baseBg, padding: 0, textAlign: "center" }}>
+                      <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, padding: 0, textAlign: "center" }}>
                         <button onClick={() => { setSlot(sd.toISOString()); setStep("form"); }}
-                          style={{ background: "transparent", border: "none", width: "100%", padding: "4px 0", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <span style={{
-                            display: "inline-block", width: 22, height: 22, borderRadius: "50%",
-                            border: `2px solid ${C.pink}`, color: C.pink,
-                            fontSize: 10, fontWeight: 700, lineHeight: "18px", textAlign: "center"
-                          }}>○</span>
+                          style={{ background: "transparent", border: "none", width: "100%", padding: "4px 0", cursor: "pointer", fontSize: 14, fontWeight: 700, color: C.pink }}>
+                          ○
                         </button>
                       </td>
                     );
@@ -376,15 +382,13 @@ function ReservationSystem() {
         </div>
       )}
 
-      {/* 案内 + リンク */}
+      {/* 下部リンク */}
       <div style={{ padding: "8px 12px 0" }}>
         <div style={{ fontSize: 10, color: C.textLight, marginBottom: 8, textAlign: "center" }}>
-          <span style={{ color: C.pink, fontWeight: 700 }}>◎</span> 予約可（タップで入力へ）　<span style={{ color: "#ccc" }}>×</span> 予約不可
+          <span style={{ color: C.pink, fontWeight: 700 }}>○</span> 予約可（タップで入力へ）　<span style={{ color: "#ccc" }}>×</span> 予約不可　※横スクロール可
         </div>
         <PriceLink />
-        <div style={{ marginTop: 6 }}>
-          <Link to="/" style={{ color: C.green, fontWeight: 700, fontSize: 12, textDecoration: "none", display: "block", textAlign: "center", padding: 8 }}>← メニューへ戻る</Link>
-        </div>
+        <Link to="/" style={{ color: C.green, fontWeight: 700, fontSize: 12, textDecoration: "none", display: "block", textAlign: "center", padding: 8, marginTop: 4 }}>← メニューへ戻る</Link>
       </div>
       <Footer />
     </div>
