@@ -41,32 +41,23 @@ const C = {
 const GlobalStyle = () => (
   <style>{`
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { overflow-x: hidden; }
     body { background: linear-gradient(180deg, ${C.cream} 0%, #f5f0e8 100%); color: ${C.text};
-      font-family: 'Noto Sans JP','Hiragino Sans','Yu Gothic',sans-serif;
-      -webkit-text-size-adjust: 100%; }
-    input, select, textarea, button { font-family: inherit; font-size: 16px; } /* スマホのズーム防止に16px */
+      font-family: 'Noto Sans JP','Hiragino Sans','Yu Gothic',sans-serif; }
+    input, select, textarea, button { font-family: inherit; }
     @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
     input::placeholder, textarea::placeholder { color: #b5a99a; }
-    
-    /* モバイル向け調整 */
-    @media (max-width: 480px) {
-      .card-padding { padding: 16px 14px !important; }
-      .text-title { font-size: 17px !important; }
-      .text-small { font-size: 12px !important; }
-    }
   `}</style>
 );
 
 const inputStyle = {
   width: "100%", padding: "12px 14px", background: C.cream,
   border: `1px solid ${C.border}`, borderRadius: 8, color: C.text,
-  fontSize: "16px", outline: "none", boxSizing: "border-box", appearance: "none"
+  fontSize: 15, outline: "none", boxSizing: "border-box"
 };
 const cardStyle = {
   background: C.white, border: `1px solid ${C.border}`, borderRadius: 12,
-  padding: "24px 20px", marginBottom: 16, width: "100%",
-  boxShadow: "0 2px 8px rgba(107,94,79,0.06)", boxSizing: "border-box"
+  padding: "24px 20px", marginBottom: 16,
+  boxShadow: "0 2px 8px rgba(107,94,79,0.06)"
 };
 const btnGreen = {
   width: "100%", padding: 15, border: "none", borderRadius: 10,
@@ -89,6 +80,11 @@ function Header() {
       background: `linear-gradient(135deg, ${C.green}, ${C.greenLight})`,
       padding: "18px 16px", textAlign: "center", position: "relative", overflow: "hidden"
     }}>
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23fff' fill-opacity='0.06'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
+        opacity: 0.5
+      }} />
       <div style={{ position: "relative", zIndex: 1 }}>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", letterSpacing: "0.12em", marginBottom: 3 }}>♿ 福祉タクシー</div>
         <h1 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: "#fff", letterSpacing: "0.06em" }}>ハコビテ　総合システム</h1>
@@ -155,11 +151,11 @@ function BreakdownRow({ label, value, bg, color, note }) {
       padding: "9px 12px", marginBottom: 5,
       background: bg, borderRadius: 8, borderLeft: `3px solid ${color}`
     }}>
-      <div style={{ flex: 1, paddingRight: 8 }}>
-        <div style={{ fontSize: 13, color: C.text }}>{label}</div>
-        {note && <div style={{ fontSize: 10, color: C.textLight }}>({note})</div>}
+      <div>
+        <span style={{ fontSize: 13, color: C.text }}>{label}</span>
+        {note && <span style={{ fontSize: 10, color: C.textLight, marginLeft: 6 }}>({note})</span>}
       </div>
-      <span style={{ fontSize: 15, fontWeight: 700, color, whiteSpace: "nowrap" }}>¥{fmt(value)}</span>
+      <span style={{ fontSize: 15, fontWeight: 700, color }}>¥{fmt(value)}</span>
     </div>
   );
 }
@@ -178,15 +174,15 @@ function PageFooter() {
 // ============================================================
 function Home() {
   return (
-    <div style={{ maxWidth: 520, margin: "0 auto", padding: "32px 16px", textAlign: "center", boxSizing: "border-box" }}>
-      <h2 className="text-title" style={{ color: C.green, marginBottom: 8, fontSize: 20 }}>🚕 ようこそ</h2>
+    <div style={{ maxWidth: 520, margin: "0 auto", padding: "32px 16px", textAlign: "center" }}>
+      <h2 style={{ color: C.green, marginBottom: 8, fontSize: 20 }}>🚕 ようこそ</h2>
       <p style={{ color: C.textMid, fontSize: 13, marginBottom: 28 }}>ご利用になるサービスをお選びください</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Link to="/price" style={{ textDecoration: "none" }}>
-          <div className="card-padding" style={{
+          <div style={{
             ...cardStyle, marginBottom: 0, padding: "22px 20px",
             display: "flex", alignItems: "center", gap: 16, cursor: "pointer",
-            borderLeft: `4px solid ${C.green}`
+            borderLeft: `4px solid ${C.green}`, transition: "box-shadow 0.2s"
           }}>
             <span style={{ fontSize: 32 }}>🧮</span>
             <div style={{ textAlign: "left" }}>
@@ -196,11 +192,12 @@ function Home() {
           </div>
         </Link>
         <Link to="/reserve" style={{ textDecoration: "none" }}>
-          <div className="card-padding" style={{
+          <div style={{
             ...cardStyle, marginBottom: 0, padding: "22px 20px",
             display: "flex", alignItems: "center", gap: 16, cursor: "pointer",
             borderLeft: `4px solid ${C.orange}`,
-            background: `linear-gradient(135deg, ${C.orangeBg}, #fff8f0)`
+            background: `linear-gradient(135deg, ${C.orangeBg}, #fff8f0)`,
+            transition: "box-shadow 0.2s"
           }}>
             <span style={{ fontSize: 32 }}>📅</span>
             <div style={{ textAlign: "left" }}>
@@ -232,10 +229,10 @@ function PriceCalculator() {
   };
 
   return (
-    <div style={{ maxWidth: 520, margin: "0 auto", padding: "16px 16px 48px", boxSizing: "border-box" }}>
+    <div style={{ maxWidth: 520, margin: "0 auto", padding: "16px 16px 48px" }}>
       <Link to="/" style={{ color: C.green, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>← メニューへ戻る</Link>
 
-      <div className="card-padding" style={{
+      <div style={{
         ...cardStyle, marginTop: 12, padding: "16px 20px",
         background: C.orangeBg, borderLeft: `4px solid ${C.orange}`
       }}>
@@ -244,7 +241,7 @@ function PriceCalculator() {
         </div>
       </div>
 
-      <div className="card-padding" style={cardStyle}>
+      <div style={cardStyle}>
         <SectionTitle icon="🧮" title="料金試算" />
 
         <FormField label="走行距離（km）" required>
@@ -254,7 +251,7 @@ function PriceCalculator() {
         </FormField>
 
         <ToggleRow active={needsCare} onToggle={() => setNeedsCare(!needsCare)}
-          icon="🤝" label="身体介護等あり" sub="＋500円"
+          icon="🤝" label="身体介護あり" sub="＋500円"
           color={C.orange} activeBg={C.orangeBg} />
 
         <ToggleRow active={isNight} onToggle={() => setIsNight(!isNight)}
@@ -272,13 +269,13 @@ function PriceCalculator() {
           ].map(opt => (
             <button key={opt.value} type="button" onClick={() => setWheelchairType(opt.value)}
               style={{
-                flex: 1, padding: "10px 4px",
+                flex: 1, padding: "12px 6px",
                 background: wheelchairType === opt.value ? C.greenBg : C.cream,
                 border: `2px solid ${wheelchairType === opt.value ? C.green : C.borderLight}`,
                 borderRadius: 8, cursor: "pointer", textAlign: "center"
               }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: wheelchairType === opt.value ? C.green : C.textMid }}>{opt.label}</div>
-              {opt.sub && <div style={{ fontSize: 9, color: C.textLight, marginTop: 2 }}>{opt.sub}</div>}
+              <div style={{ fontSize: 13, fontWeight: 600, color: wheelchairType === opt.value ? C.green : C.textMid }}>{opt.label}</div>
+              {opt.sub && <div style={{ fontSize: 10, color: C.textLight, marginTop: 2 }}>{opt.sub}</div>}
             </button>
           ))}
         </div>
@@ -289,22 +286,44 @@ function PriceCalculator() {
           <div style={{ marginTop: 16, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}`, animation: "fadeIn 0.3s ease-out" }}>
             <div style={{ padding: "20px 16px", textAlign: "center", background: `linear-gradient(135deg, ${C.greenBg}, #f0f7e8)`, borderBottom: `1px solid ${C.border}` }}>
               <div style={{ fontSize: 11, color: C.textLight, letterSpacing: "0.1em", marginBottom: 4 }}>推定合計料金（片道）</div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: C.green, lineHeight: 1.1 }}>¥{fmt(fareResult.total)}</div>
+              <div style={{ fontSize: 38, fontWeight: 800, color: C.green, lineHeight: 1.1 }}>¥{fmt(fareResult.total)}</div>
             </div>
             <div style={{ padding: "14px 16px" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, marginBottom: 8 }}>📋 内訳</div>
               <BreakdownRow label={`メーター運賃（${parseFloat(tripKm).toFixed(1)}km）`} value={fareResult.meterFare} bg={C.greenBg} color={C.green} note={isNight ? "深夜割増込" : ""} />
               <BreakdownRow label="福祉車両代" value={fareResult.welfareFee} bg={C.orangeBg} color={C.orange} />
-              {fareResult.careFee > 0 && <BreakdownRow label="身体介護等料" value={fareResult.careFee} bg={C.redBg} color={C.red} />}
+              {fareResult.careFee > 0 && <BreakdownRow label="身体介護料" value={fareResult.careFee} bg={C.redBg} color={C.red} />}
               {fareResult.wheelchairFee > 0 && <BreakdownRow label={`車椅子レンタル（${wheelchairType === "reclining" ? "リクライニング" : "普通型"}）`} value={fareResult.wheelchairFee} bg={C.purpleBg} color={C.purple} note="日またぎ" />}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", marginTop: 8, borderTop: `2px solid ${C.border}` }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>合計</span>
-                <span style={{ fontSize: 18, fontWeight: 800, color: C.green }}>¥{fmt(fareResult.total)}</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color: C.green }}>¥{fmt(fareResult.total)}</span>
               </div>
+            </div>
+            <div style={{ padding: "10px 16px", borderTop: `1px solid ${C.border}`, background: C.cream, fontSize: 11, color: C.textMid, lineHeight: 1.7 }}>
+              初乗り: {FARE.baseFare}円 ｜ 加算: {FARE.meterFare}円 / {FARE.meterDistance * 1000}m（全距離に適用）
+              <br />福祉車両代 {fmt(FARE.welfareFee)}円は基本に含まれます
+              <div style={{ marginTop: 3, color: C.textLight }}>※ 交通状況等により変動します。時間加算は含みません。</div>
             </div>
           </div>
         )}
       </div>
+
+      {/* 予約への導線 */}
+      <Link to="/reserve" style={{ textDecoration: "none", display: "block" }}>
+        <div style={{
+          ...cardStyle, padding: "18px 20px", marginBottom: 0,
+          display: "flex", alignItems: "center", gap: 14,
+          borderLeft: `4px solid ${C.orange}`,
+          background: `linear-gradient(135deg, ${C.orangeBg}, #fff8f0)`,
+          cursor: "pointer"
+        }}>
+          <span style={{ fontSize: 28 }}>📅</span>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.orange }}>予約はこちら →</div>
+            <div style={{ fontSize: 11, color: C.textLight, marginTop: 2 }}>空き状況を確認してそのまま予約できます</div>
+          </div>
+        </div>
+      </Link>
 
       <PageFooter />
     </div>
@@ -323,9 +342,9 @@ function ReservationSystem() {
 
   const [booking, setBooking] = useState({
     duration: "30分", name: "", furigana: "", tel: "", email: "",
-    serviceType: "介護タクシー",
+    serviceType: "介護タクシー（保険外）外出支援",
     from: "", to: "", wheelchair: "利用なし",
-    careReq: "乗降介助程度（＋0円）", passengers: "1名",
+    careReq: "見守りのみ", passengers: "1名",
     isSamePerson: "はい", payment: "現金", note: ""
   });
 
@@ -363,15 +382,34 @@ function ReservationSystem() {
       const bS = new Date(b.start).getTime(), bE = new Date(b.end).getTime();
       return startMs < bE && endMs > bS;
     });
-    if (conflict) { alert(`選択された時間帯は既に予約があります。`); return; }
+    if (conflict) { alert(`選択された時間帯（${booking.duration}）は既に予約があります。別の時間をお選びください。`); return; }
+
+    const slotD = new Date(selectedSlot);
+    const endD = new Date(endMs);
+    const dateStr = slotD.toLocaleString("ja-JP", { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const endStr = `${endD.getHours()}:${endD.getMinutes().toString().padStart(2, "0")}`;
+    const details = [
+      `■日時: ${dateStr} ～ ${endStr} (${booking.duration})`,
+      `■サービス: ${booking.serviceType}`,
+      `■お名前: ${booking.name}（${booking.furigana}）`,
+      `■電話: ${booking.tel}`,
+      `■メール: ${booking.email || "未入力"}`,
+      `■お迎え場所: ${booking.from}`,
+      `■目的地: ${booking.to}`,
+      `■車椅子: ${booking.wheelchair}`,
+      `■介助: ${booking.careReq}`,
+      `■乗車人数: ${booking.passengers}`,
+      `■ご本人: ${booking.isSamePerson}`,
+      `■支払い: ${booking.payment}`,
+      `■備考: ${booking.note || "なし"}`
+    ].join("\n");
 
     try {
       const res = await fetch("/api/reserve", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           summary: `【予約】${booking.name}様 (${booking.duration}) - ${booking.serviceType}`,
-          description: `サービス: ${booking.serviceType}\n介助: ${booking.careReq}\n場所: ${booking.from}→${booking.to}\n備考: ${booking.note}`, 
-          start: selectedSlot,
+          description: details, start: selectedSlot,
           duration_minutes: durationMap[booking.duration],
           name: booking.name, email: booking.email
         })
@@ -380,84 +418,190 @@ function ReservationSystem() {
     } catch { alert("通信エラーが発生しました。"); }
   };
 
+  // ----- 完了 -----
   if (step === "success") return (
     <div style={{ maxWidth: 520, margin: "0 auto", padding: "40px 16px", textAlign: "center" }}>
-      <div style={cardStyle} className="card-padding">
+      <div style={cardStyle}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
         <h2 style={{ color: C.green, marginBottom: 8 }}>ご予約ありがとうございます</h2>
-        <p style={{ color: C.textMid, fontSize: 14, marginBottom: 20 }}>内容を確認し、折り返しご連絡を差し上げます。</p>
+        <p style={{ color: C.textMid, fontSize: 14, lineHeight: 1.8, marginBottom: 20 }}>確認のご連絡を差し上げます。</p>
         <button onClick={() => { setStep("slots"); setWeekOffset(0); }} style={btnGreen}>カレンダーに戻る</button>
       </div>
     </div>
   );
 
+  // ----- 予約フォーム -----
   if (step === "form") {
     const slotD = selectedSlot ? new Date(selectedSlot) : null;
     return (
-      <div style={{ maxWidth: 520, margin: "0 auto", padding: "16px 16px 48px", boxSizing: "border-box" }}>
+      <div style={{ maxWidth: 520, margin: "0 auto", padding: "16px 16px 48px" }}>
         <button onClick={() => setStep("slots")} style={{
           background: "none", border: "none", color: C.green,
           fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 12, padding: 0
         }}>← 空き状況に戻る</button>
 
-        <div className="card-padding" style={{ ...cardStyle, padding: "14px 20px", background: C.greenBg, borderLeft: `4px solid ${C.green}` }}>
+        {/* ステップ表示 */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 6, marginBottom: 16, fontSize: 12, color: C.textLight
+        }}>
+          <span style={{ background: C.greenBg, color: C.green, fontWeight: 700, padding: "3px 10px", borderRadius: 12, fontSize: 11 }}>① 日時選択 ✓</span>
+          <span style={{ color: C.border }}>→</span>
+          <span style={{ background: C.orangeBg, color: C.orange, fontWeight: 700, padding: "3px 10px", borderRadius: 12, fontSize: 11 }}>② 詳細入力（いまここ）</span>
+          <span style={{ color: C.border }}>→</span>
+          <span style={{ color: C.textLight, fontSize: 11 }}>③ 予約完了</span>
+        </div>
+
+        {/* 選択日時 */}
+        <div style={{ ...cardStyle, padding: "14px 20px", background: C.greenBg, borderLeft: `4px solid ${C.green}` }}>
           <div style={{ fontSize: 11, color: C.textLight, marginBottom: 3 }}>選択した日時</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.green }}>
-            📅 {slotD ? slotD.toLocaleString("ja-JP", { month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+          <div style={{ fontSize: 17, fontWeight: 700, color: C.green }}>
+            📅 {slotD ? slotD.toLocaleString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" }) : "未選択"}
           </div>
         </div>
 
         <form onSubmit={handleReserve}>
-          <div className="card-padding" style={cardStyle}>
-            <SectionTitle icon="⏱" title="詳細設定" />
-            <FormField label="ご利用時間" required>
+          {/* 利用時間 */}
+          <div style={cardStyle}>
+            <SectionTitle icon="⏱" title="ご利用時間" />
+            <FormField label="ご利用予定時間" required>
               <select value={booking.duration} onChange={e => updateBooking("duration", e.target.value)} style={inputStyle}>
                 {Object.keys(durationMap).map(d => <option key={d}>{d}</option>)}
               </select>
             </FormField>
-            <FormField label="サービス種別" required>
-              <select value={booking.serviceType} onChange={e => updateBooking("serviceType", e.target.value)} style={inputStyle}>
-                {["介護タクシー", "買い物代行・付き添い", "お手伝い支援", "安否確認サービス"].map(s => <option key={s}>{s}</option>)}
-              </select>
-            </FormField>
           </div>
 
-          <div className="card-padding" style={cardStyle}>
+          {/* お客様情報 */}
+          <div style={cardStyle}>
             <SectionTitle icon="👤" title="お客様情報" />
             <FormField label="お名前" required>
-              <input type="text" required placeholder="例: 山田 太郎" value={booking.name} onChange={e => updateBooking("name", e.target.value)} style={inputStyle} />
+              <input type="text" required placeholder="山田 太郎" value={booking.name} onChange={e => updateBooking("name", e.target.value)} style={inputStyle} />
+            </FormField>
+            <FormField label="ふりがな">
+              <input type="text" placeholder="やまだ たろう" value={booking.furigana} onChange={e => updateBooking("furigana", e.target.value)} style={inputStyle} />
             </FormField>
             <FormField label="電話番号" required>
               <input type="tel" required placeholder="090-1234-5678" value={booking.tel} onChange={e => updateBooking("tel", e.target.value)} style={inputStyle} />
             </FormField>
+            <FormField label="メールアドレス">
+              <input type="email" placeholder="example@email.com" value={booking.email} onChange={e => updateBooking("email", e.target.value)} style={inputStyle} />
+            </FormField>
           </div>
 
-          <div className="card-padding" style={cardStyle}>
-            <SectionTitle icon="📍" title="行程" />
+          {/* サービス・行程 */}
+          <div style={cardStyle}>
+            <SectionTitle icon="📍" title="サービス・行程" />
+            <FormField label="サービス種別" required>
+              <select value={booking.serviceType} onChange={e => updateBooking("serviceType", e.target.value)} style={inputStyle}>
+                {["介護タクシー（保険外）外出支援", "介護タクシー（保険外）通院支援", "買い物代行・付き添い", "その他"].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </FormField>
             <FormField label="お迎え場所" required>
-              <textarea required placeholder="住所や施設名" value={booking.from} onChange={e => updateBooking("from", e.target.value)} style={{ ...inputStyle, minHeight: 60 }} />
+              <textarea required placeholder="住所・施設名など" value={booking.from} onChange={e => updateBooking("from", e.target.value)} style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} />
             </FormField>
-            <FormField label="目的地">
-              <textarea placeholder="行き先（決まっていれば）" value={booking.to} onChange={e => updateBooking("to", e.target.value)} style={{ ...inputStyle, minHeight: 60 }} />
+            <FormField label="目的地" required>
+              <textarea required placeholder="住所・施設名など" value={booking.to} onChange={e => updateBooking("to", e.target.value)} style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} />
             </FormField>
           </div>
 
-          <div className="card-padding" style={cardStyle}>
+          {/* 介助・車椅子 */}
+          <div style={cardStyle}>
             <SectionTitle icon="♿" title="介助・車椅子" />
-            <FormField label="介助の内容" required>
+            <FormField label="介助の必要性" required>
               <select value={booking.careReq} onChange={e => updateBooking("careReq", e.target.value)} style={inputStyle}>
-                {["乗降介助程度（＋0円）", "身体介護等あり（＋500円）"].map(c => <option key={c}>{c}</option>)}
+                {["見守りのみ", "身体介護あり（＋500円）"].map(c => <option key={c}>{c}</option>)}
               </select>
             </FormField>
-            <FormField label="車椅子の利用">
-              <select value={booking.wheelchair} onChange={e => updateBooking("wheelchair", e.target.value)} style={inputStyle}>
-                {["利用なし", "自分の車椅子を使用", "普通型レンタル", "リクライニング型レンタル"].map(w => <option key={w}>{w}</option>)}
+            <FormField label="車椅子" required>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {[
+                  { v: "利用なし", label: "利用なし", color: C.textMid },
+                  { v: "自分の車椅子を使用", label: "自分の車椅子を使用", color: C.textMid },
+                  { v: "普通型レンタル", label: "普通型をレンタル（日またぎ＋500円）", color: C.green },
+                  { v: "リクライニング型レンタル", label: "リクライニング型をレンタル（日またぎ＋700円）", color: C.purple }
+                ].map(opt => (
+                  <label key={opt.v} onClick={() => updateBooking("wheelchair", opt.v)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 12px", borderRadius: 8, cursor: "pointer",
+                      background: booking.wheelchair === opt.v ? C.greenBg : C.cream,
+                      border: `1.5px solid ${booking.wheelchair === opt.v ? C.green : C.borderLight}`,
+                      transition: "all 0.2s"
+                    }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: "50%",
+                      border: `2px solid ${booking.wheelchair === opt.v ? C.green : "#ccc"}`,
+                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+                    }}>
+                      {booking.wheelchair === opt.v && <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.green }} />}
+                    </div>
+                    <span style={{ fontSize: 13, color: booking.wheelchair === opt.v ? C.green : C.textMid, fontWeight: booking.wheelchair === opt.v ? 600 : 400 }}>
+                      {opt.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </FormField>
+            <FormField label="乗車人数">
+              <select value={booking.passengers} onChange={e => updateBooking("passengers", e.target.value)} style={inputStyle}>
+                {["1名", "2名（付き添い1名）", "3名（付き添い2名）"].map(p => <option key={p}>{p}</option>)}
               </select>
             </FormField>
-            <FormField label="備考">
-              <textarea placeholder="特記事項があればご記入ください" value={booking.note} onChange={e => updateBooking("note", e.target.value)} style={{ ...inputStyle, minHeight: 80 }} />
+            <FormField label="ご予約者はご本人ですか？">
+              <select value={booking.isSamePerson} onChange={e => updateBooking("isSamePerson", e.target.value)} style={inputStyle}>
+                {["はい", "いいえ（代理予約）"].map(v => <option key={v}>{v}</option>)}
+              </select>
             </FormField>
           </div>
+
+          {/* 支払い・備考 */}
+          <div style={cardStyle}>
+            <SectionTitle icon="💳" title="お支払い・備考" />
+            <FormField label="お支払い方法" required>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {["現金", "銀行振込", "請求書払い（法人）"].map(opt => (
+                  <label key={opt} onClick={() => updateBooking("payment", opt)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 12px", borderRadius: 8, cursor: "pointer",
+                      background: booking.payment === opt ? C.greenBg : C.cream,
+                      border: `1.5px solid ${booking.payment === opt ? C.green : C.borderLight}`,
+                      transition: "all 0.2s"
+                    }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: "50%",
+                      border: `2px solid ${booking.payment === opt ? C.green : "#ccc"}`,
+                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+                    }}>
+                      {booking.payment === opt && <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.green }} />}
+                    </div>
+                    <span style={{ fontSize: 13, color: booking.payment === opt ? C.green : C.textMid, fontWeight: booking.payment === opt ? 600 : 400 }}>
+                      {opt}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </FormField>
+            <FormField label="備考・ご要望">
+              <textarea placeholder="何かあればご記入ください" value={booking.note} onChange={e => updateBooking("note", e.target.value)}
+                style={{ ...inputStyle, minHeight: 80, resize: "vertical" }} />
+            </FormField>
+          </div>
+
+          {/* 料金試算リンク */}
+          <a href="https://hakobite-reserve.vercel.app/price" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", display: "block", marginBottom: 16 }}>
+            <div style={{
+              ...cardStyle, marginBottom: 0, padding: "14px 20px",
+              display: "flex", alignItems: "center", gap: 12,
+              borderLeft: `4px solid ${C.green}`, cursor: "pointer"
+            }}>
+              <span style={{ fontSize: 22 }}>🧮</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>料金の試算はこちら →</div>
+                <div style={{ fontSize: 11, color: C.textLight, marginTop: 1 }}>距離とオプションから概算料金を確認できます</div>
+              </div>
+            </div>
+          </a>
 
           <button type="submit" style={btnOrange}>📩 この内容で予約する</button>
         </form>
@@ -467,46 +611,94 @@ function ReservationSystem() {
     );
   }
 
+  // ----- カレンダー -----
   const now = new Date();
 
   return (
-    <div style={{ maxWidth: 700, margin: "0 auto", padding: "16px 12px 48px", boxSizing: "border-box" }}>
+    <div style={{ maxWidth: 700, margin: "0 auto", padding: "16px 16px 48px" }}>
       <Link to="/" style={{ color: C.green, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>← メニューへ戻る</Link>
-      <h2 style={{ textAlign: "center", color: C.green, margin: "16px 0", fontSize: 19 }}>📅 予約カレンダー</h2>
+
+      <h2 style={{ textAlign: "center", color: C.green, margin: "16px 0 8px", fontSize: 20 }}>📅 ハコビテ 予約フォーム</h2>
 
       {/* 案内 */}
-      <div className="card-padding" style={{ ...cardStyle, padding: "12px", background: C.orangeBg, borderLeft: `4px solid ${C.orange}` }}>
-        <div style={{ fontSize: 12, color: C.textMid, lineHeight: 1.6 }}>
-          「<span style={{ color: "#e0004e", fontWeight: 700 }}>○</span>」をタップして予約を進めてください。<br />
-          <span style={{ fontSize: 11, color: C.textLight }}>※ 表は左右にスクロールして確認できます</span>
+      <div style={{
+        ...cardStyle, padding: "14px 18px", marginBottom: 12,
+        borderLeft: `4px solid ${C.orange}`, background: C.orangeBg
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.orange, marginBottom: 4 }}>📱 予約の流れ</div>
+        <div style={{ fontSize: 12, color: C.textMid, lineHeight: 1.8 }}>
+          ① 空いている「<span style={{ color: "#e0004e", fontWeight: 700 }}>○</span>」をタップ → ② ご利用内容を入力 → ③ 予約完了！<br />
+          <span style={{ color: C.textLight }}>※ 表は左右にスクロールできます</span>
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0" }}>
-        <button onClick={() => setWeekOffset(p => p - 1)} disabled={weekOffset <= 0} style={{ padding: "8px 12px", border: "none", borderRadius: 6, background: weekOffset <= 0 ? "#ddd" : C.green, color: "#fff", fontSize: 13 }}>前の週</button>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>{weekDays[0].getMonth()+1}/{weekDays[0].getDate()}～</div>
-        <button onClick={() => setWeekOffset(p => p + 1)} style={{ padding: "8px 12px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontSize: 13 }}>次の週</button>
+      {/* 週送りナビ */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "12px 0" }}>
+        <button onClick={() => setWeekOffset(p => p - 1)} disabled={weekOffset <= 0}
+          style={{
+            padding: "10px 16px", border: "none", borderRadius: 8, fontWeight: 700,
+            background: weekOffset <= 0 ? "#ddd" : C.green, color: weekOffset <= 0 ? "#999" : "#fff",
+            cursor: weekOffset <= 0 ? "default" : "pointer", fontSize: 13
+          }}>← 前の週</button>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>
+          {weekDays[0].getMonth() + 1}/{weekDays[0].getDate()} ～ {weekDays[6].getMonth() + 1}/{weekDays[6].getDate()}
+        </div>
+        <button onClick={() => setWeekOffset(p => p + 1)}
+          style={{
+            padding: "10px 16px", border: "none", borderRadius: 8, fontWeight: 700,
+            background: C.green, color: "#fff", cursor: "pointer", fontSize: 13
+          }}>次の週 →</button>
       </div>
 
+      {/* 凡例 */}
+      <div style={{ display: "flex", gap: 16, justifyContent: "center", fontSize: 12, color: C.textMid, marginBottom: 10 }}>
+        <span><span style={{ color: "#e0004e", fontWeight: 700, fontSize: 14 }}>○</span> 予約可</span>
+        <span><span style={{ color: "#bbb", fontSize: 14 }}>×</span> 予約不可</span>
+      </div>
+
+      {/* カレンダー */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: 40 }}>読み込み中...</div>
+        <div style={{ textAlign: "center", padding: 30, color: C.textLight }}>読み込み中...</div>
       ) : (
-        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", border: `1px solid ${C.border}`, borderRadius: 10, background: "#fff" }}>
-          <table style={{ borderCollapse: "collapse", minWidth: 540, width: "100%" }}>
+        <div style={{
+          overflowX: "auto", WebkitOverflowScrolling: "touch",
+          border: `1px solid ${C.border}`, borderRadius: 10,
+          background: C.white, boxShadow: "0 2px 8px rgba(107,94,79,0.06)",
+          marginBottom: 16
+        }}>
+          <table style={{ borderCollapse: "collapse", minWidth: 560, width: "100%", fontSize: 13 }}>
             <thead>
               <tr>
-                <th style={{ background: C.green, color: "#fff", padding: "10px 4px", fontSize: 12, position: "sticky", left: 0, zIndex: 10 }}>時間</th>
-                {weekDays.map((d, i) => (
-                  <th key={i} style={{ background: C.greenBg, color: d.getDay() === 0 ? C.red : d.getDay() === 6 ? "#1a6bcc" : C.green, padding: "8px 4px", fontSize: 12, border: `1px solid ${C.border}` }}>
-                    {d.getDate()}({dayNames[d.getDay()]})
-                  </th>
-                ))}
+                <th style={{
+                  background: C.green, color: "#fff", padding: "8px 4px",
+                  border: `1px solid ${C.border}`, position: "sticky", left: 0, zIndex: 3,
+                  minWidth: 56, fontSize: 12, fontWeight: 700
+                }}>時間</th>
+                {weekDays.map((d, i) => {
+                  const dow = d.getDay();
+                  const color = dow === 0 ? "#cc1a1a" : dow === 6 ? "#1a6bcc" : C.green;
+                  return (
+                    <th key={i} style={{
+                      background: C.greenBg, color, padding: "8px 4px",
+                      border: `1px solid ${C.border}`, fontSize: 12, fontWeight: 700,
+                      whiteSpace: "nowrap"
+                    }}>
+                      {d.getMonth() + 1}/{d.getDate()}<br />({dayNames[dow]})
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {timeSlots.map((time, idx) => (
                 <tr key={idx}>
-                  <td style={{ position: "sticky", left: 0, background: "#f9f9f7", padding: "8px 4px", fontSize: 12, textAlign: "center", border: `1px solid ${C.border}`, fontWeight: 600 }}>
+                  <td style={{
+                    position: "sticky", left: 0, background: "#f9f9f7",
+                    padding: "6px 4px", border: `1px solid ${C.border}`,
+                    borderRight: `2px solid ${C.border}`,
+                    fontWeight: 600, fontSize: 12, color: C.textMid,
+                    textAlign: "center", zIndex: 2, whiteSpace: "nowrap"
+                  }}>
                     {time.hour}:{time.minute.toString().padStart(2, "0")}
                   </td>
                   {weekDays.map((d, i) => {
@@ -519,14 +711,25 @@ function ReservationSystem() {
                       const bS = new Date(b.start).getTime(), bE = new Date(b.end).getTime();
                       return slotStartMs < bE && slotEndMs > bS;
                     });
+
+                    if (isPast) return (
+                      <td key={i} style={{ background: "#f5f3f0", color: "#ccc", border: `1px solid ${C.border}`, textAlign: "center", fontSize: 14 }}>×</td>
+                    );
+                    if (isBusy) return (
+                      <td key={i} style={{ background: "#fafafa", color: "#bbb", border: `1px solid ${C.border}`, textAlign: "center", fontSize: 14 }}>×</td>
+                    );
                     return (
-                      <td key={i} style={{ border: `1px solid ${C.border}`, textAlign: "center", padding: 0 }}>
-                        {isPast || isBusy ? (
-                          <span style={{ color: "#bbb", fontSize: 14 }}>×</span>
-                        ) : (
-                          <button onClick={() => { setSelectedSlot(slotDate.toISOString()); setStep("form"); }}
-                            style={{ background: "#fff5f8", color: "#e0004e", border: "none", width: "100%", padding: "10px 0", cursor: "pointer", fontWeight: 700, fontSize: 16 }}>○</button>
-                        )}
+                      <td key={i} style={{ padding: 0, border: `1px solid ${C.border}` }}>
+                        <button onClick={() => { setSelectedSlot(slotDate.toISOString()); setStep("form"); }}
+                          style={{
+                            background: "#fff5f8", color: "#e0004e", border: "none",
+                            width: "100%", height: "100%", padding: "8px 0",
+                            fontWeight: 700, fontSize: 16, cursor: "pointer",
+                            transition: "background 0.15s"
+                          }}
+                          onMouseEnter={e => e.target.style.background = "#ffe4ee"}
+                          onMouseLeave={e => e.target.style.background = "#fff5f8"}
+                        >○</button>
                       </td>
                     );
                   })}
@@ -536,6 +739,22 @@ function ReservationSystem() {
           </table>
         </div>
       )}
+
+      {/* 料金試算リンク */}
+      <a href="https://hakobite-reserve.vercel.app/price" style={{ textDecoration: "none", display: "block" }}>
+        <div style={{
+          ...cardStyle, marginBottom: 0, padding: "16px 20px",
+          display: "flex", alignItems: "center", gap: 12,
+          borderLeft: `4px solid ${C.green}`, cursor: "pointer"
+        }}>
+          <span style={{ fontSize: 24 }}>🧮</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>料金の試算はこちら →</div>
+            <div style={{ fontSize: 11, color: C.textLight, marginTop: 1 }}>距離とオプションから概算料金を確認できます</div>
+          </div>
+        </div>
+      </a>
+
       <PageFooter />
     </div>
   );
