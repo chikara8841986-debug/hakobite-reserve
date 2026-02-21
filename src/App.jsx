@@ -51,12 +51,14 @@ function PriceCalculator() {
 
 // --- コンポーネント3: 予約システム ---
 function ReservationSystem() {
-  const [step, setStep] = useState("slots"); // slots, form, success
+  const [step, setStep] = useState("slots"); 
   const [loading, setLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [weekOffset, setWeekOffset] = useState(0); // 週の切り替え用
+  const [weekOffset, setWeekOffset] = useState(0); 
   
-  // 予約フォーム用ステート
+  // APIから取得した予約済み日時を保存する場所
+  const [busySlots, setBusySlots] = useState([]); 
+  
   const [booking, setBooking] = useState({
     duration: "30分", name: "", tel: "", email: "",
     serviceType: "介護タクシー（保険外）外出支援",
@@ -64,7 +66,6 @@ function ReservationSystem() {
     payment: "現金", note: ""
   });
 
-  // カレンダー表示用の日付と時間を生成
   const baseDate = new Date();
   baseDate.setDate(baseDate.getDate() + (weekOffset * 7));
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -75,10 +76,24 @@ function ReservationSystem() {
   const timeSlots = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
   const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
 
+  // 画面を開いた時に1回だけ、カレンダーデータ（60日分）を取得する
   useEffect(() => {
-    // API連携が完了するまではダミーで即時ローディング完了とする
-    setLoading(false);
-  }, [weekOffset]);
+    async function fetchSlots() {
+      setLoading(true);
+      try {
+        const res = await fetch('/api/slots');
+        if (res.ok) {
+          const data = await res.json();
+          setBusySlots(data || []);
+        }
+      } catch (e) {
+        console.error("API読み込みエラー:", e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchSlots();
+  }, []);
 
   const handleReserve = async (e) => {
     e.preventDefault();
@@ -88,18 +103,22 @@ function ReservationSystem() {
       start: selectedSlot, name: booking.name, email: booking.email
     };
     
-    // API連携時はコメントアウトを解除
-    /*
-    const res = await fetch('/api/reserve', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) setStep("success");
-    */
-    
-    // テスト用に強制成功
-    console.log("予約送信:", payload);
-    setStep("success");
+    // 実際にバックエンドへ予約データを送信する処理
+    try {
+      const res = await fetch('/api/reserve', {
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setStep("success");
+      } else {
+        alert("予約の送信に失敗しました。");
+      }
+    } catch (e) {
+      console.error("送信エラー:", e);
+      alert("通信エラーが発生しました。");
+    }
   };
 
   if (step === "success") return (
@@ -152,7 +171,7 @@ function ReservationSystem() {
         <button onClick={() => setWeekOffset(prev => prev + 1)} style={{ padding: "8px 15px", background: C.green, color: "#fff", border: "none", borderRadius: "5px", cursor: "pointer" }}>次の週</button>
       </div>
 
-      {loading ? <p style={{ textAlign: "center" }}>読み込み中...</p> : (
+      {loading ? <p style={{ textAlign: "center" }}>カレンダーを読み込み中...</p> : (
         <div style={{ overflowX: "auto", background: C.white, borderRadius: "10px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
           <table style={{ width: "100%", minWidth: "500px", borderCollapse: "collapse", textAlign: "center" }}>
             <thead>
@@ -175,23 +194,32 @@ function ReservationSystem() {
                     const [hours, minutes] = time.split(':');
                     slotDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
                     
-                    // 過去の日時は選択不可（グレーアウト）
                     const isPast = slotDate < new Date();
+                    
+                    // APIから取得した予定と照合して「×」をつける強力な判定
+                    const isBusy = busySlots.some(busyIso => {
+                      const bTime = new Date(busyIso).getTime();
+                      const sTime = slotDate.getTime();
+                      const eTime = sTime + 60 * 60 * 1000; // 1時間の枠内に予定があるかチェック
+                      return bTime >= sTime && bTime < eTime;
+                    });
+                    
+                    const isDisabled = isPast || isBusy;
 
                     return (
                       <td key={i} style={{ padding: "5px", borderBottom: "1px solid #eee" }}>
                         <button 
-                          disabled={isPast}
+                          disabled={isDisabled}
                           onClick={() => { setSelectedSlot(slotDate.toISOString()); setStep("form"); }}
                           style={{ 
                             width: "100%", padding: "10px 0", 
-                            background: isPast ? "#f5f5f5" : "#fff", 
-                            color: isPast ? "#ccc" : C.green, 
-                            border: isPast ? "1px solid #eee" : `1px solid ${C.green}`, 
-                            borderRadius: "5px", cursor: isPast ? "not-allowed" : "pointer",
+                            background: isDisabled ? "#f5f5f5" : "#fff", 
+                            color: isDisabled ? "#ccc" : C.green, 
+                            border: isDisabled ? "1px solid #eee" : `1px solid ${C.green}`, 
+                            borderRadius: "5px", cursor: isDisabled ? "not-allowed" : "pointer",
                             fontWeight: "bold"
                           }}>
-                          {isPast ? "-" : "○"}
+                          {isPast ? "-" : isBusy ? "×" : "○"}
                         </button>
                       </td>
                     );
