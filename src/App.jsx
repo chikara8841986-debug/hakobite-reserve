@@ -67,7 +67,7 @@ function Header() {
       <div style={{ position: "absolute", inset: 0, background: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23fff' fill-opacity='0.06'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")", opacity: 0.5 }} />
       <div style={{ position: "relative", zIndex: 1 }}>
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", letterSpacing: "0.12em", marginBottom: 2 }}>♿ 福祉タクシー</div>
-        <h1 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#fff", letterSpacing: "0.06em" }}>ハコビテ　総合システム</h1>
+        <h1 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#fff", letterSpacing: "0.06em" }}>ハコビテ　ふじ介護タクシー</h1>
       </div>
     </header>
   );
@@ -369,7 +369,7 @@ function ReservationSystem() {
                     return (
                       <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, padding: 0, textAlign: "center" }}>
                         <button onClick={() => { setSlot(sd.toISOString()); setStep("form"); }}
-                          style={{ background: "transparent", border: "none", width: "100%", padding: "4px 0", cursor: "pointer", fontSize: 14, fontWeight: 700, color: C.pink }}>
+                         style={{ background: "transparent", border: "none", width: "100%", padding: "4px 0", cursor: "pointer", fontSize: 18, fontWeight: 900, color: "#e0004e", textShadow: "0 0 1px #e0004e" }}>
                           ○
                         </button>
                       </td>
