@@ -263,7 +263,7 @@ function ReservationSystem() {
             <ST icon="📍" title="サービス・行程" />
             <FF label="サービス種別" required><RG options={["介護タクシー", "買い物代行・付き添い", "その他"]} value={bk.serviceType} onChange={v => ub("serviceType", v)} /></FF>
             <FF label="お迎え場所" required><textarea required placeholder="住所・施設名など" value={bk.from} onChange={e => ub("from", e.target.value)} style={{ ...inp, minHeight: 56, resize: "vertical" }} /></FF>
-            <FF label="目的地" required><textarea required placeholder="住所・施設名など" value={bk.to} onChange={e => ub("to", e.target.value)} style={{ ...inp, minHeight: 56, resize: "vertical" }} /></FF>
+            <FF label="目的地"><textarea placeholder="住所・施設名など" value={bk.to} onChange={e => ub("to", e.target.value)} style={{ ...inp, minHeight: 56, resize: "vertical" }} /></FF>
           </div>
           <div style={card}>
             <ST icon="♿" title="介助・車椅子" />
