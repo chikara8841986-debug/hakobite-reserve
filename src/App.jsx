@@ -298,8 +298,8 @@ function ReservationSystem() {
           padding: "10px 14px", marginBottom: 6
         }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.orange, marginBottom: 4 }}>📱 電話不要！3分でかんたん予約</div>
-          <div style={{ fontSize: 11, color: C.textMid, lineHeight: 1.7 }}>
-            ① 空いている「<span style={{ color: C.pink, fontWeight: 700 }}>○</span>」をタップ<br />
+          <div style={{ fontSize: 15, color: C.textMid, lineHeight: 1.7 }}>
+            ① 空いている「<span style={{ color: #e0004e, fontWeight: 700 }}>○</span>」をタップ<br />
             ② お名前・行き先・介助内容などを入力<br />
             ③ そのまま予約完了！
           </div>
