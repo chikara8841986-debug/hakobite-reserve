@@ -261,7 +261,7 @@ function ReservationSystem() {
           </div>
           <div style={card}>
             <ST icon="📍" title="サービス・行程" />
-            <FF label="サービス種別" required><RG options={["介護タクシー", "買い物代行・付き添い", "その他"]} value={bk.serviceType} onChange={v => ub("serviceType", v)} /></FF>
+            <FF label="サービス種別" required><RG options={["介護タクシー", "買い物代行", "生活支援サービス", "安否確認・報告サービス", "その他"]} value={bk.serviceType} onChange={v => ub("serviceType", v)} /></FF>
             <FF label="お迎え・ご利用場所" required><textarea required placeholder="住所・施設名など" value={bk.from} onChange={e => ub("from", e.target.value)} style={{ ...inp, minHeight: 56, resize: "vertical" }} /></FF>
             <FF label="目的地"><textarea placeholder="住所・施設名など" value={bk.to} onChange={e => ub("to", e.target.value)} style={{ ...inp, minHeight: 56, resize: "vertical" }} /></FF>
           </div>
