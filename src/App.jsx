@@ -271,7 +271,7 @@ function ReservationSystem() {
     if (!bk.name.trim()) e.name = "お名前を入力してください";
     if (!bk.tel.trim()) e.tel = "電話番号を入力してください";
     if (!bk.from.trim()) e.from = "お迎え場所を入力してください";
-    if (bookerRequiresName && !bk.bookerName.trim()) e.bookerName = "ご担当者様のお名前を入力してください";
+    if (bookerRequiresName && !isFujiKaigo && !bk.bookerName.trim()) e.bookerName = "ご担当者のお名前を入力してください";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -300,7 +300,7 @@ function ReservationSystem() {
     const dateStr8 = `${sD.getFullYear()}/${(sD.getMonth()+1).toString().padStart(2,"0")}/${sD.getDate().toString().padStart(2,"0")}`;
 
     const bookerInfo = bookerRequiresName
-      ? `■ご担当者様のお名前: ${bk.bookerName}\n■ご担当者様連絡先: ${bk.bookerTelSame ? bk.tel : bk.bookerTel}`
+      ? `■ご担当者のお名前: ${bk.bookerName}\n■ご担当者連絡先: ${bk.bookerTelSame ? bk.tel : bk.bookerTel}`
       : `■予約者区分: ${bk.bookerType}`;
     const familyInfo = isFujiKaigo ? `\n■家族・病院担当者名: ${bk.familyHospitalStaffName}` : "";
     const careNotesInfo = bk.careNotes ? `\n■ご利用に際しての留意事項: ${bk.careNotes}` : "";
@@ -408,8 +408,8 @@ function ReservationSystem() {
             <ConfirmRow label="電話番号" value={bk.tel} />
             <ConfirmRow label="メールアドレス" value={bk.email || "未入力"} />
             <ConfirmRow label="予約者区分" value={bk.bookerType} />
-            {bookerRequiresName && <ConfirmRow label="ご担当者様のお名前" value={bk.bookerName} highlight />}
-            {bookerRequiresName && <ConfirmRow label="ご担当者様連絡先" value={bk.bookerTelSame ? bk.tel + "（利用者と同じ）" : bk.bookerTel} />}
+            {bookerRequiresName && !isFujiKaigo && <ConfirmRow label="ご担当者のお名前" value={bk.bookerName} highlight />}
+            {bookerRequiresName && <ConfirmRow label="ご担当者連絡先" value={bk.bookerTelSame ? bk.tel + "（利用者と同じ）" : bk.bookerTel} />}
             {isFujiKaigo && bk.familyHospitalStaffName && <ConfirmRow label="家族・病院担当者名" value={bk.familyHospitalStaffName} />}
             {bk.careNotes && <ConfirmRow label="ご利用上の留意事項" value={bk.careNotes} />}
           </div>
@@ -537,16 +537,18 @@ function ReservationSystem() {
             </FF>
             {bookerRequiresName && (
               <>
-                <FF label="ご担当者様のお名前" required error={errors.bookerName}>
-                  <input
-                    type="text"
-                    placeholder="担当者のお名前を入力"
-                    value={bk.bookerName}
-                    onChange={e => { ub("bookerName", e.target.value); setErrors(p => ({ ...p, bookerName: "" })); }}
-                    style={{ ...inp, borderColor: errors.bookerName ? C.red : C.border }}
-                  />
-                </FF>
-                <FF label="ご担当者様連絡先">
+                {!isFujiKaigo && (
+                  <FF label="ご担当者のお名前" required error={errors.bookerName}>
+                    <input
+                      type="text"
+                      placeholder="ご担当者のお名前を入力"
+                      value={bk.bookerName}
+                      onChange={e => { ub("bookerName", e.target.value); setErrors(p => ({ ...p, bookerName: "" })); }}
+                      style={{ ...inp, borderColor: errors.bookerName ? C.red : C.border }}
+                    />
+                  </FF>
+                )}
+                <FF label="ご担当者連絡先">
                   <div style={{ marginBottom: 6 }}>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.textMid, cursor: "pointer" }}>
                       <input
@@ -561,7 +563,7 @@ function ReservationSystem() {
                   {!bk.bookerTelSame && (
                     <input
                       type="tel"
-                      placeholder="担当者の電話番号"
+                      placeholder="ご担当者の電話番号"
                       value={bk.bookerTel}
                       onChange={e => ub("bookerTel", e.target.value)}
                       style={inp}
