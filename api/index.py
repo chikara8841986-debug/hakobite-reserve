@@ -74,7 +74,7 @@ def reserve():
         start_dt = datetime.datetime.fromisoformat(start_str.replace('Z', '+00:00')).astimezone(JST)
         end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
 
-        # カレンダーへ予定を追加
+        # カレンダーへ予約本体を追加
         event = {
             'summary': summary,
             'description': description,
@@ -83,6 +83,18 @@ def reserve():
         }
         calendar_id = os.environ.get("CALENDAR_ID", "chikara8841986@gmail.com")
         service.events().insert(calendarId=calendar_id, body=event).execute()
+
+        # カレンダーへ移動時間（予約開始30分前）を追加
+        travel_end_dt = start_dt
+        travel_start_dt = start_dt - datetime.timedelta(minutes=30)
+        travel_summary = data.get('gcalTravelSummary', f'【移動】{name}様のお迎え準備')
+        travel_event = {
+            'summary': travel_summary,
+            'description': f'【移動時間】{name}様 お迎えの準備\nお迎え先: {data.get("from", "")}',
+            'start': {'dateTime': travel_start_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
+            'end': {'dateTime': travel_end_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
+        }
+        service.events().insert(calendarId=calendar_id, body=travel_event).execute()
 
         # LINE通知
         line_token = os.environ.get("LINE_TOKEN")
