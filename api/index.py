@@ -153,14 +153,17 @@ def reserve():
                 "serviceType": data.get("serviceType", "介護タクシー"),
                 "pickupLocation": data.get("from", data.get("pickupLocation", "")),
                 "dropoffLocation": data.get("to", data.get("dropoffLocation", "")),
-                "passengerCount": data.get("passengerCount", 1),
-                "wheelchairNeeded": data.get("wheelchairNeeded", "不要"),
+                "passengerCount": data.get("passengers", data.get("passengerCount", 1)),
+                "wheelchairNeeded": data.get("wheelchair", data.get("wheelchairNeeded", "不要")),
                 "careNotes": data.get("careNotes", ""),
                 "bookerType": data.get("bookerType", "本人"),
                 "staffName": data.get("bookerName", data.get("staffName", "")),
                 "staffTel": data.get("bookerTel", data.get("staffTel", "")),
+                "staffTelSameAsCustomer": data.get("bookerTelSame", False),
                 "familyHospitalStaffName": data.get("familyHospitalStaffName", ""),
-                "memo": data.get("notes", data.get("memo", "")),
+                "paymentMethod": data.get("payment", data.get("paymentMethod", "現金")),
+                "careReq": data.get("careReq", ""),
+                "memo": data.get("note", data.get("notes", data.get("memo", ""))),
                 "source": "reserve_app"
             }
             # GASにPOSTしてreservationsに追記させる
