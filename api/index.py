@@ -135,6 +135,46 @@ def reserve():
             except Exception as e:
                 print(f"Email Error: {e}")
 
+        # 業務管理アプリ（GAS）へ予約データを同期
+        gas_url = os.environ.get(
+            "GAS_URL",
+            "https://script.google.com/macros/s/AKfycbw6Ep8OOakgStBhAMd2P_3tbbf5EJN8e18GGbyoOWIc4dJlq4Wti1dazOjg5ygm61nG/exec"
+        )
+        try:
+            import time, random, string
+            new_id = f"{int(time.time() * 1000)}_{(''.join(random.choices(string.ascii_lowercase + string.digits, k=5)))}"
+            reservation_item = {
+                "id": new_id,
+                "createdAt": start_dt.isoformat(),
+                "customerName": name,
+                "customerPhone": data.get("phone", ""),
+                "customerEmail": to_email,
+                "reservationDate": start_dt.isoformat(),
+                "serviceType": data.get("serviceType", "介護タクシー"),
+                "pickupLocation": data.get("from", ""),
+                "dropoffLocation": data.get("to", ""),
+                "passengerCount": data.get("passengerCount", 1),
+                "wheelchairNeeded": data.get("wheelchairNeeded", "不要"),
+                "careNotes": data.get("careNotes", ""),
+                "bookerType": data.get("bookerType", "本人"),
+                "staffName": data.get("staffName", ""),
+                "staffTel": data.get("staffTel", ""),
+                "memo": data.get("notes", ""),
+                "source": "reserve_app"
+            }
+            # GASにPOSTしてreservationsに追記させる
+            gas_payload = json.dumps({"addReservation": reservation_item}).encode("utf-8")
+            gas_req = urllib.request.Request(
+                gas_url,
+                data=gas_payload,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(gas_req, timeout=10) as gas_res:
+                print(f"GAS sync: {gas_res.status}")
+        except Exception as e:
+            print(f"GAS Sync Error (non-fatal): {e}")
+
         return jsonify({"status": "success"})
     except Exception as e:
         print(f"Reserve API Error: {e}")
