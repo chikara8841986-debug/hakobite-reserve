@@ -236,6 +236,7 @@ function ReservationSystem() {
   const [wOff, setWOff] = useState(0);
   const [busy, setBusy] = useState([]);
   const [errors, setErrors] = useState({});
+  const [submitted, setSubmitted] = useState(false);
   const [bk, setBk] = useState({
     duration: "30分",
     name: "", tel: "", email: "",
@@ -278,6 +279,7 @@ function ReservationSystem() {
 
   const goConfirm = (e) => {
     e.preventDefault();
+    setSubmitted(true);
     if (validate()) setStep("confirm");
   };
 
@@ -620,15 +622,16 @@ function ReservationSystem() {
             </div>
           </div>
 
-          {Object.keys(errors).length > 0 && (
-            <div style={{ ...card, background: C.redBg, borderColor: C.red + "40", borderLeft: `4px solid ${C.red}`, padding: "12px 14px" }}>
+          <button type="submit" style={bOrange}>内容を確認する →</button>
+
+          {submitted && Object.keys(errors).length > 0 && (
+            <div style={{ ...card, background: C.redBg, borderColor: C.red + "40", borderLeft: `4px solid ${C.red}`, padding: "12px 14px", marginTop: 10 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 4 }}>⚠ 入力内容をご確認ください</div>
               {Object.values(errors).map((e, i) => <div key={i} style={{ fontSize: 12, color: C.red }}>・{e}</div>)}
             </div>
           )}
 
-          <div style={{ marginBottom: 14 }}><PriceLink /></div>
-          <button type="submit" style={bOrange}>内容を確認する →</button>
+          <div style={{ marginTop: 14 }}><PriceLink /></div>
         </form>
         <Footer />
       </div>
