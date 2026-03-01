@@ -511,12 +511,10 @@ function ReservationSystem() {
               <input type="tel" placeholder="090-1234-5678" value={bk.tel} onChange={e => { ub("tel", e.target.value); setErrors(p => ({ ...p, tel: "" })); }} style={{ ...inp, borderColor: errors.tel ? C.red : C.border }} />
             </FF>
             <FF label="メールアドレス">
-              <input type="email" placeholder="example@email.com（入力していただくと確認メールが届きます）" value={bk.email} onChange={e => ub("email", e.target.value)} style={inp} />
-              {bk.email && (
-                <div style={{ fontSize: 11, color: C.blue, marginTop: 4, padding: "6px 8px", background: C.blueBg, borderRadius: 6 }}>
-                  📧 予約完了後に <strong>{bk.email}</strong> 宛へ予約内容をお送りします
-                </div>
-              )}
+              <div style={{ fontSize: 12, color: C.blue, marginBottom: 6, padding: "6px 8px", background: C.blueBg, borderRadius: 6 }}>
+                📧 入力いただくと、予約完了後に確認メールをお送りします（任意）
+              </div>
+              <input type="email" placeholder="example@email.com" value={bk.email} onChange={e => ub("email", e.target.value)} style={inp} />
             </FF>
             {/* ご利用に際しての留意事項 */}
             <FF label="ご利用者様に関するご利用に際しての留意事項">
