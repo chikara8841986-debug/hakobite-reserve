@@ -105,9 +105,15 @@ def reserve():
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {line_token}"
             }
+            line_message = (
+                f"🔔 新しい予約が入りました！\n\n"
+                f"{summary}\n\n"
+                f"{description}\n\n"
+                f"予約者の区分: {data.get('bookerType', '本人')}"
+            )
             payload = {
                 "to": line_user_id,
-                "messages": [{"type": "text", "text": f"🔔 新しい予約が入りました！\n\n{summary}\n\n{description}"}]
+                "messages": [{"type": "text", "text": line_message}]
             }
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
             try:
