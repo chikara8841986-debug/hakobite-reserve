@@ -251,7 +251,7 @@ function ReservationSystem() {
     bookerTelSame: false,
     familyHospitalStaffName: "",
     careNotes: "",
-    payment: "現金",
+    payments: ["現金"],
     note: ""
   });
 
@@ -319,7 +319,7 @@ function ReservationSystem() {
       `■車椅子: ${bk.wheelchair}`,
       `■介助: ${bk.careReq}`,
       `■人数: ${bk.passengers}`,
-      `■支払: ${bk.payment}`,
+      `■支払: ${(bk.payments || []).join(" / ")}`,
       `■備考: ${bk.note || "なし"}`
     ].join("\n");
 
@@ -340,7 +340,7 @@ function ReservationSystem() {
           to: bk.to,
           wheelchair: bk.wheelchair,
           passengers: bk.passengers,
-          payment: bk.payment,
+          payment: (bk.payments || []).join(" / "),
           note: bk.note,
           serviceType: bk.serviceType,
           careReq: bk.careReq,
@@ -444,7 +444,7 @@ function ReservationSystem() {
 
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, marginBottom: 4, paddingBottom: 4, borderBottom: `2px solid ${C.borderLight}` }}>💳 お支払い・備考</div>
-            <ConfirmRow label="支払方法" value={bk.payment} />
+            <ConfirmRow label="支払方法" value={(bk.payments || []).join(" / ")} />
             <ConfirmRow label="備考" value={bk.note || "なし"} />
           </div>
 
@@ -611,7 +611,23 @@ function ReservationSystem() {
           </div>
           <div style={card}>
             <ST icon="💳" title="お支払い・備考" />
-            <FF label="お支払い方法" required><RG options={["現金", "銀行振込", "請求書払い（法人）"]} value={bk.payment} onChange={v => ub("payment", v)} /></FF>
+            <FF label="お支払い方法（複数選択可）" required>
+              {["現金", "タクシー券", "銀行振込", "請求書払い（法人）"].map(opt => {
+                const checked = (bk.payments || []).includes(opt);
+                return (
+                  <label key={opt} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, background: checked ? "#ecfdf5" : "#f8fafc", border: `2px solid ${checked ? "#6ee7b7" : "#e2e8f0"}`, borderRadius: 10, cursor: "pointer" }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 4, background: checked ? "#10b981" : "white", border: `2px solid ${checked ? "#10b981" : "#cbd5e1"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {checked && <svg width="12" height="12" viewBox="0 0 20 20" fill="white"><path fillRule="evenodd" d="M16.7 4.2a.75.75 0 01.1 1l-8 10.5a.75.75 0 01-1.1.1l-4.5-4.5a.75.75 0 011-1l3.9 3.9 7.5-9.8a.75.75 0 011-.2z"/></svg>}
+                    </div>
+                    <input type="checkbox" checked={checked} style={{ display: "none" }} onChange={e => {
+                      const cur = bk.payments || [];
+                      ub("payments", e.target.checked ? [...cur, opt] : cur.filter(x => x !== opt));
+                    }} />
+                    <span style={{ fontSize: 14, fontWeight: 600, color: checked ? "#065f46" : "#475569" }}>{opt}</span>
+                  </label>
+                );
+              })}
+            </FF>
             <FF label="備考・ご要望"><textarea placeholder="何かあればご記入ください" value={bk.note} onChange={e => ub("note", e.target.value)} style={{ ...inp, minHeight: 70, resize: "vertical" }} /></FF>
           </div>
 
