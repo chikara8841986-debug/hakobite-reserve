@@ -7,6 +7,35 @@ from googleapiclient.discovery import build
 app = Flask(__name__)
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
+# ============================================================
+# IP制限：同一IPから1時間以内に3件以上の予約を拒否
+# ============================================================
+_ip_log = {}  # { ip: [タイムスタンプ, ...] }
+IP_LIMIT = 3        # 上限件数
+IP_WINDOW = 3600    # 1時間（秒）
+
+def check_ip_limit(ip: str) -> bool:
+    """True=OK, False=制限超過"""
+    now = datetime.datetime.utcnow().timestamp()
+    timestamps = _ip_log.get(ip, [])
+    # ウィンドウ外のログを削除
+    timestamps = [t for t in timestamps if now - t < IP_WINDOW]
+    if len(timestamps) >= IP_LIMIT:
+        _ip_log[ip] = timestamps
+        return False
+    timestamps.append(now)
+    _ip_log[ip] = timestamps
+    return True
+
+def get_client_ip() -> str:
+    """Vercel経由でも実IPを取得"""
+    return (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or request.headers.get("X-Real-IP", "")
+        or request.remote_addr
+        or "unknown"
+    )
+
 def get_service():
     try:
         info = json.loads(os.environ.get("GCP_SERVICE_ACCOUNT_JSON", "{}"))
@@ -61,6 +90,11 @@ def get_slots():
 
 @app.route('/api/reserve', methods=['POST'])
 def reserve():
+    # IP制限チェック
+    client_ip = get_client_ip()
+    if not check_ip_limit(client_ip):
+        return jsonify({"error": "短時間に予約が集中しています。しばらく時間をおいてから再度お試しください。"}), 429
+
     try:
         data = request.json
         start_str = data.get('start')

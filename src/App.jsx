@@ -369,8 +369,13 @@ function ReservationSystem() {
           gcalTravelEnd: `${dateStr8} ${travelEndTime}`
         })
       });
-      if (r.ok) setStep("success");
-      else alert("送信に失敗しました。");
+      if (r.ok) {
+        setStep("success");
+      } else if (r.status === 429) {
+        alert("短時間に予約が集中しています。しばらく時間をおいてから再度お試しください。");
+      } else {
+        alert("送信に失敗しました。");
+      }
     } catch {
       alert("通信エラーが発生しました。");
     } finally {
