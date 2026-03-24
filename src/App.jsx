@@ -237,6 +237,16 @@ function ReservationSystem() {
   const [busy, setBusy] = useState([]);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState(null);
+
+  useEffect(() => {
+    window.onRecaptchaSuccess = (token) => setRecaptchaToken(token);
+    window.onRecaptchaExpired = () => setRecaptchaToken(null);
+    return () => {
+      delete window.onRecaptchaSuccess;
+      delete window.onRecaptchaExpired;
+    };
+  }, []);
   const [bk, setBk] = useState({
     duration: "30分",
     name: "", tel: "", email: "",
@@ -284,6 +294,10 @@ function ReservationSystem() {
   };
 
   const submit = async () => {
+    if (!recaptchaToken) {
+      alert("「私はロボットではありません」にチェックを入れてください。");
+      return;
+    }
     const sMs = new Date(slot).getTime(), eMs = sMs + durMap[bk.duration] * 60000;
     if (busy.some(b => sMs < new Date(b.end).getTime() && eMs > new Date(b.start).getTime())) {
       alert(`選択された時間帯（${bk.duration}）は既に予約があります。`);
@@ -471,7 +485,17 @@ function ReservationSystem() {
             </div>
           )}
 
-          <button onClick={submit} disabled={submitting} style={{ ...bOrange, opacity: submitting ? 0.7 : 1 }}>
+          {/* reCAPTCHA */}
+          <div style={{ marginBottom: 14 }}>
+            <div
+              className="g-recaptcha"
+              data-sitekey="6LduB5YsAAAAALHBcveV6-7j2RFFqL0pepMX-KJw"
+              data-callback="onRecaptchaSuccess"
+              data-expired-callback="onRecaptchaExpired"
+            ></div>
+          </div>
+
+          <button onClick={submit} disabled={submitting || !recaptchaToken} style={{ ...bOrange, opacity: (submitting || !recaptchaToken) ? 0.6 : 1 }}>
             {submitting ? "送信中..." : "✅ この内容で予約を確定する"}
           </button>
           <button onClick={() => setStep("form")} style={{ width: "100%", padding: 12, border: `1px solid ${C.border}`, borderRadius: 10, background: C.white, color: C.textMid, fontSize: 14, cursor: "pointer", marginTop: 8 }}>
