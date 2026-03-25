@@ -48,6 +48,42 @@ def get_service():
         print(f"Credentials Error: {e}")
         raise
 
+@app.route('/api/distance', methods=['GET'])
+def get_distance():
+    origin = request.args.get('origin', '')
+    destination = request.args.get('destination', '')
+    if not origin or not destination:
+        return jsonify({"error": "origin と destination が必要です"}), 400
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+    if not api_key:
+        return jsonify({"error": "APIキーが設定されていません"}), 500
+    try:
+        url = (
+            "https://maps.googleapis.com/maps/api/distancematrix/json"
+            f"?origins={urllib.request.quote(origin)}"
+            f"&destinations={urllib.request.quote(destination)}"
+            f"&mode=driving"
+            f"&language=ja"
+            f"&key={api_key}"
+        )
+        with urllib.request.urlopen(url, timeout=10) as res:
+            data = json.loads(res.read().decode())
+        element = data["rows"][0]["elements"][0]
+        if element["status"] != "OK":
+            return jsonify({"error": "ルートが見つかりませんでした"}), 404
+        distance_m = element["distance"]["value"]
+        distance_km = round(distance_m / 1000, 1)
+        duration_text = element["duration"]["text"]
+        distance_text = element["distance"]["text"]
+        return jsonify({
+            "distance_km": distance_km,
+            "distance_text": distance_text,
+            "duration_text": duration_text
+        })
+    except Exception as e:
+        print(f"Distance API Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/slots', methods=['GET'])
 def get_slots():
     try:

@@ -172,14 +172,28 @@ function PriceCalculator() {
   const [res, setRes] = useState(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [distLoading, setDistLoading] = useState(false);
+  const [distInfo, setDistInfo] = useState(null);
+  const [distError, setDistError] = useState("");
   const calc = () => { const d = parseFloat(km); if (d > 0) setRes(calculateFare(d, { needsCare: care, wheelchairType: wc })); };
 
-  const openMap = () => {
-    if (!from && !to) return;
-    const base = "https://www.google.com/maps/dir/?api=1&travelmode=driving";
-    const origin = from ? `&origin=${encodeURIComponent(from)}` : "";
-    const dest = to ? `&destination=${encodeURIComponent(to)}` : "";
-    window.open(base + origin + dest, "_blank");
+  const fetchDistance = async () => {
+    if (!from || !to) return;
+    setDistLoading(true);
+    setDistError("");
+    setDistInfo(null);
+    try {
+      const r = await fetch(`/api/distance?origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}`);
+      const data = await r.json();
+      if (!r.ok) { setDistError(data.error || "取得に失敗しました"); return; }
+      setDistInfo(data);
+      setKm(String(data.distance_km));
+      setRes(null);
+    } catch {
+      setDistError("通信エラーが発生しました");
+    } finally {
+      setDistLoading(false);
+    }
   };
 
   return (
@@ -191,22 +205,30 @@ function PriceCalculator() {
       <div style={card}>
         <ST icon="🧮" title="料金試算" />
 
-        {/* 出発地・目的地 → Googleマップ */}
+        {/* 出発地・目的地 → 距離自動取得 */}
         <div style={{ marginBottom: 14, padding: "12px 14px", background: C.blueBg, borderRadius: 10, border: `1px solid ${C.blue}30` }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 8 }}>🗺️ 距離をGoogleマップで確認</div>
-          <FF label="出発地"><input type="text" placeholder="例：善通寺市役所" value={from} onChange={e => setFrom(e.target.value)} style={inp} /></FF>
-          <FF label="目的地"><input type="text" placeholder="例：丸亀市民病院" value={to} onChange={e => setTo(e.target.value)} style={inp} /></FF>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 8 }}>🗺️ 住所から距離を自動取得</div>
+          <FF label="出発地"><input type="text" placeholder="例：善通寺市役所" value={from} onChange={e => { setFrom(e.target.value); setDistInfo(null); }} style={inp} /></FF>
+          <FF label="目的地"><input type="text" placeholder="例：丸亀市民病院" value={to} onChange={e => { setTo(e.target.value); setDistInfo(null); }} style={inp} /></FF>
           <button
             type="button"
-            onClick={openMap}
-            disabled={!from && !to}
-            style={{ ...bGreen, background: C.blue, opacity: (!from && !to) ? 0.5 : 1, marginBottom: 0 }}
+            onClick={fetchDistance}
+            disabled={!from || !to || distLoading}
+            style={{ ...bGreen, background: C.blue, opacity: (!from || !to || distLoading) ? 0.5 : 1, marginBottom: 0 }}
           >
-            🗺️ Googleマップでルートを開く
+            {distLoading ? "取得中..." : "📍 距離を自動入力する"}
           </button>
-          <div style={{ fontSize: 10, color: C.textLight, marginTop: 6 }}>
-            マップで距離を確認して、下の「走行距離」欄に入力してください。
-          </div>
+          {distInfo && (
+            <div style={{ marginTop: 8, padding: "8px 10px", background: "white", borderRadius: 8, border: `1px solid ${C.blue}40` }}>
+              <span style={{ fontSize: 12, color: C.blue, fontWeight: 700 }}>✅ {distInfo.distance_text}（約{distInfo.duration_text}）</span>
+              <div style={{ fontSize: 11, color: C.textLight, marginTop: 2 }}>走行距離欄に自動入力しました</div>
+            </div>
+          )}
+          {distError && (
+            <div style={{ marginTop: 8, padding: "8px 10px", background: C.redBg, borderRadius: 8 }}>
+              <span style={{ fontSize: 12, color: C.red }}>⚠ {distError}</span>
+            </div>
+          )}
         </div>
 
         <FF label="走行距離（km）" required><input type="number" step="0.1" min="0" inputMode="decimal" placeholder="例: 5.2" value={km} onChange={e => setKm(e.target.value)} style={inp} /></FF>
