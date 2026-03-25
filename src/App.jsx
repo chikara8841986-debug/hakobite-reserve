@@ -247,6 +247,28 @@ function ReservationSystem() {
       delete window.onRecaptchaExpired;
     };
   }, []);
+
+  // 確認画面に切り替わったタイミングでreCAPTCHAを手動レンダリング
+  useEffect(() => {
+    if (step !== "confirm") return;
+    const tryRender = () => {
+      const el = document.querySelector(".g-recaptcha:not([data-rendered])");
+      if (!el) return;
+      if (window.grecaptcha && window.grecaptcha.render) {
+        try {
+          window.grecaptcha.render(el, {
+            sitekey: "6LduB5YsAAAAALHBcveV6-7j2RFFqL0pepMX-KJw",
+            callback: window.onRecaptchaSuccess,
+            "expired-callback": window.onRecaptchaExpired,
+          });
+          el.setAttribute("data-rendered", "true");
+        } catch (_) {}
+      } else {
+        setTimeout(tryRender, 300);
+      }
+    };
+    setTimeout(tryRender, 100);
+  }, [step]);
   const [bk, setBk] = useState({
     duration: "30分",
     name: "", tel: "", email: "",
@@ -290,7 +312,10 @@ function ReservationSystem() {
   const goConfirm = (e) => {
     e.preventDefault();
     setSubmitted(true);
-    if (validate()) setStep("confirm");
+    if (validate()) {
+      setRecaptchaToken(null); // 確認画面に来るたびにリセット
+      setStep("confirm");
+    }
   };
 
   const submit = async () => {
