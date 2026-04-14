@@ -326,7 +326,12 @@ function ReservationSystem() {
   const bookerRequiresName = ["ソーシャルワーカー", "ケアマネジャー", "家族・代理人", "施設担当者", "ふじ介護タクシー", "その他（本人以外）"].includes(bk.bookerType);
   const isFujiKaigo = bk.bookerType === "ふじ介護タクシー";
 
-  useEffect(() => { setLoading(true); fetch("/api/slots").then(r => r.ok ? r.json() : []).then(d => setBusy(d || [])).catch(() => setBusy([])).finally(() => setLoading(false)); }, []);
+  const refreshBusy = () => {
+    setLoading(true);
+    fetch("/api/slots").then(r => r.ok ? r.json() : []).then(d => setBusy(d || [])).catch(() => setBusy([])).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { refreshBusy(); }, []);
 
   const validate = () => {
     const e = {};
@@ -452,7 +457,7 @@ function ReservationSystem() {
         {!["ソーシャルワーカー", "ふじ介護タクシー"].includes(bk.bookerType) && (
           <p style={{ color: C.textMid, fontSize: 12, lineHeight: 1.7, marginBottom: 20 }}>確認のご連絡を差し上げます。</p>
         )}
-        <button onClick={() => { setStep("slots"); setWOff(0); }} style={bGreen}>カレンダーに戻る</button>
+        <button onClick={() => { refreshBusy(); setStep("slots"); setWOff(0); }} style={bGreen}>カレンダーに戻る</button>
       </div>
     </div>
   );

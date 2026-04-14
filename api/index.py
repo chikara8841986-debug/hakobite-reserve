@@ -68,9 +68,20 @@ def get_distance():
         )
         with urllib.request.urlopen(url, timeout=10) as res:
             data = json.loads(res.read().decode())
-        element = data["rows"][0]["elements"][0]
-        if element["status"] != "OK":
-            return jsonify({"error": "ルートが見つかりませんでした"}), 404
+        # APIレベルのステータス確認
+        if data.get("status") != "OK":
+            return jsonify({"error": f"住所が見つかりませんでした（{data.get('status', 'UNKNOWN')}）"}), 404
+        rows = data.get("rows", [])
+        if not rows or not rows[0].get("elements"):
+            return jsonify({"error": "ルート情報を取得できませんでした"}), 404
+        element = rows[0]["elements"][0]
+        if element.get("status") != "OK":
+            status = element.get("status", "UNKNOWN")
+            msg = {
+                "NOT_FOUND": "住所が見つかりませんでした。もう少し詳しく入力してください（例：○○病院 善通寺市）",
+                "ZERO_RESULTS": "ルートが見つかりませんでした",
+            }.get(status, f"取得できませんでした（{status}）")
+            return jsonify({"error": msg}), 404
         distance_m = element["distance"]["value"]
         distance_km = round(distance_m / 1000, 1)
         duration_text = element["duration"]["text"]

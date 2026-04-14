@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ハコビテ - 丸亀・善通寺の介護タクシー＆生活支援</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #f9f9f9; }
+        #hakobite-green {
+            font-family: "Noto Sans JP", "Helvetica Neue", Arial, sans-serif !important;
+            color: #333 !important; line-height: 1.6 !important;
+            max-width: 1000px !important; margin: 0 auto !important;
+            background: #fff !important; padding: 0 !important;
+            box-sizing: border-box !important;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+        }
+        #hakobite-green h2, #hakobite-green h3, #hakobite-green h4 {
+            background: none !important; border: none !important;
+            padding: 0 !important; margin: 0 !important; position: static !important;
+        }
+        #hakobite-green h2::before, #hakobite-green h2::after,
+        #hakobite-green h3::before, #hakobite-green h3::after { content: none !important; display: none !important; }
+        .hg-header { padding: 40px 20px 30px !important; background-color: #f1f8e9 !important; border-bottom: 4px solid #c5e1a5 !important; text-align: center; }
+        .hg-header h2 { font-size: 3rem !important; font-weight: 900 !important; color: #2e7d32 !important; margin: 5px 0 10px !important; line-height: 1.1 !important; letter-spacing: 0.1em; }
+        .hg-announce-banner {
+            background: linear-gradient(90deg, #fff8e1, #fff3cd) !important;
+            border-left: 5px solid #ff8f00 !important; padding: 14px 20px !important;
+            display: flex !important; align-items: center !important; gap: 12px !important;
+            flex-wrap: wrap !important; margin: 0 !important;
+        }
+        .hg-announce-label { background: #e65100; color: white; font-size: 12px; font-weight: bold; padding: 3px 10px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+        .hg-announce-banner p { font-size: 14px !important; color: #5d4037 !important; margin: 0 !important; }
+        .hg-announce-banner strong { color: #e65100; }
+        .hg-area { background: #fff !important; border: 2px solid #c5e1a5 !important; color: #558b2f !important; padding: 12px 15px !important; text-align: center !important; border-radius: 8px !important; margin: 30px 20px 20px !important; font-weight: bold !important; font-size: 0.95rem !important; }
+        .hg-ticket-banner { background: #fffde7 !important; border: 2px solid #fdd835 !important; border-radius: 8px !important; padding: 15px 20px !important; margin: 0 20px 30px !important; display: flex !important; flex-direction: column !important; align-items: center !important; gap: 8px !important; font-weight: bold !important; text-align: center !important; }
+        .hg-ticket-main { font-size: 0.95rem !important; color: #f57f17 !important; }
+        .hg-ticket-sub { font-size: 0.9rem !important; color: #d84315 !important; }
+        .hg-message-box { margin: 40px 20px !important; padding: 30px 25px !important; background: #fbfdfb !important; border-left: 5px solid #2e7d32 !important; box-shadow: 0 2px 15px rgba(0,0,0,0.05) !important; border-radius: 0 12px 12px 0 !important; }
+        .hg-message-inner { display: flex !important; align-items: flex-start !important; gap: 24px !important; }
+        .hg-message-photo { flex-shrink: 0 !important; }
+        .hg-message-photo img { width: 160px !important; height: 160px !important; border-radius: 50% !important; object-fit: cover !important; border: 3px solid #c5e1a5 !important; box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important; display: block !important; }
+        .hg-message-body { flex: 1 !important; min-width: 0 !important; }
+        @media (max-width: 480px) {
+            .hg-message-inner { flex-direction: column !important; align-items: center !important; }
+            .hg-message-photo img { width: 90px !important; height: 90px !important; }
+        }
+        .hg-message-title { font-size: 1.25rem !important; font-weight: bold !important; color: #2e7d32 !important; margin-bottom: 15px !important; display: flex; align-items: center; gap: 8px; }
+        .hg-message-text { font-size: 0.95rem !important; line-height: 1.9 !important; color: #444 !important; text-align: justify; }
+        .hg-message-footer { margin-top: 15px; text-align: right; font-weight: bold; color: #333; }
+        .hg-emphasize { color: #2e7d32; font-weight: 900; }
+        .hg-section-title { text-align: center !important; margin-top: 50px !important; margin-bottom: 30px !important; }
+        .hg-section-title h3 { display: inline-block !important; font-size: 1.5rem !important; color: #2e7d32 !important; font-weight: bold !important; border-bottom: 3px solid #2e7d32 !important; padding-bottom: 5px !important; line-height: 1.2 !important; }
+        .hg-vehicle-container { padding: 0 20px 20px !important; display: flex !important; flex-direction: column; gap: 25px; }
+        .hg-vehicle-img-box { width: 100%; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid #eee; }
+        .hg-vehicle-img-box img { width: 100%; height: auto; display: block; }
+        .hg-vehicle-info h4 { font-size: 1.4rem !important; color: #2e7d32 !important; margin-bottom: 15px !important; font-weight: bold !important; }
+        .hg-feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        .hg-feature-item { background: #f7fbf7; padding: 15px; border-radius: 8px; border: 1px solid #cceec9; font-size: 0.95rem; }
+        .hg-feature-item strong { color: #2e7d32; display: block; margin-bottom: 5px; font-size: 1.05rem; }
+        .hg-future-note { font-size: 0.85rem; color: #666; background: #f0f0f0; padding: 8px 15px; border-radius: 4px; display: inline-block; }
+        .hg-services { display: flex !important; flex-wrap: wrap !important; gap: 20px !important; padding: 0 20px 20px !important; }
+        .hg-card { flex: 1 1 280px !important; border: 2px solid #cceec9 !important; border-radius: 12px !important; padding: 25px 20px !important; background: #f7fbf7 !important; text-align: center !important; display: flex !important; flex-direction: column !important; box-shadow: 0 3px 5px rgba(0,0,0,0.05) !important; }
+        .hg-card h4 { font-size: 1.25rem !important; color: #2e7d32 !important; margin-bottom: 15px !important; border-bottom: 2px solid #fff !important; padding-bottom: 10px !important; font-weight: bold !important; }
+        .hg-card p { font-size: 0.95rem !important; margin-bottom: 15px !important; text-align: left !important; flex-grow: 1 !important; color: #333 !important; }
+        .hg-pr-badge { display: block; background: #fff3e0; color: #e65100; font-size: 0.85rem; font-weight: bold; padding: 8px; border-radius: 6px; margin-bottom: 15px; border: 1px dashed #ffb74d; text-align: center; }
+        .hg-price-box { margin-top: auto !important; background: #fff; padding: 10px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .hg-price-main { font-size: 1.25rem !important; font-weight: bold !important; color: #e65100 !important; display: block; }
+        .hg-free-badge { display: inline-block; background: #e8f5e9; color: #2e7d32; font-size: 0.75rem; font-weight: bold; padding: 3px 10px; border-radius: 4px; border: 1px solid #a5d6a7; margin-top: 8px; }
+        .shop-list-container { margin: 20px 20px 50px !important; background: #fff; border-top: 1px dashed #bbb; padding-top: 30px; }
+        .shop-title-area { text-align: center; margin-bottom: 25px; background: #f9fbe7; padding: 15px; border-radius: 8px; border: 2px solid #c5e1a5; }
+        .shop-name { font-size: 1.2rem; font-weight: bold; color: #2e7d32; display: block; }
+        .item-grid { display: flex; flex-wrap: wrap; gap: 15px; }
+        .item-card { flex: 1 1 45%; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 15px; display: flex; align-items: center; box-sizing: border-box; }
+        .item-icon { font-size: 1.8rem; margin-right: 12px; min-width: 40px; text-align: center; }
+        .item-cat { font-weight: bold; color: #2e7d32; display: block; }
+        .item-detail { font-size: 0.8rem; color: #666; }
+        .hg-btn-reserve {
+            display: inline-block !important;
+            padding: 15px 40px !important;
+            width: 90% !important;
+            max-width: 500px !important;
+            border-radius: 50px !important;
+            font-weight: bold !important;
+            text-decoration: none !important;
+            margin-bottom: 16px !important;
+            background: #0073d9 !important;
+            color: #fff !important;
+            font-size: 1.1rem !important;
+            box-shadow: 0 4px 10px rgba(0,115,217,0.35) !important;
+        }
+        .hg-btn-sim, .hg-btn { display: inline-block !important; padding: 15px 40px !important; width: 90% !important; max-width: 500px !important; border-radius: 50px !important; font-weight: bold !important; text-decoration: none !important; margin-bottom: 16px !important; }
+        .hg-btn-sim { background: #f57f17 !important; color: #fff !important; }
+        .hg-btn { background: #2e7d32 !important; color: #fff !important; }
+        .hg-contact-section { background: #f1f8e9 !important; padding: 50px 20px !important; text-align: center !important; }
+        .hg-tel-box { background: #fff !important; border: 3px solid #2e7d32 !important; border-radius: 10px !important; padding: 15px 0 !important; max-width: 600px !important; margin: 0 auto 15px !important; }
+        .hg-tel-main { font-size: 2.4rem !important; font-weight: 900 !important; color: #d32f2f !important; text-decoration: none; }
+        .hg-footer { background: #333; color: #fff; padding: 40px 20px; text-align: center; }
+        .hg-badge { background: #2e7d32; padding: 4px 10px; font-size: 0.8rem; border-radius: 4px; margin-left: 10px; }
+        @media (min-width: 800px) { .hg-vehicle-container { flex-direction: row !important; align-items: flex-start; } .hg-vehicle-img-box { flex: 0 0 45%; } .hg-vehicle-info { flex: 1; } }
+        @media (max-width: 600px) { .hg-header h2 { font-size: 2rem !important; } .item-card { flex: 1 1 100%; } .hg-tel-main { font-size: 1.8rem !important; } }
+        /* ============================================================
+           予約カレンダー専用スタイル
+        ============================================================ */
+        #hg-reserve-wrap {
+            padding:0 20px 40px;
+            font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic",sans-serif;
+        }
+        .hg-sim-btn {
+            display:block; text-align:center; text-decoration:none;
+            background:linear-gradient(135deg,#e88634,#f5a623);
+            color:#fff; padding:16px 24px; border-radius:50px;
+            font-weight:900; font-size:1.1rem;
+            margin:0 auto 22px; max-width:500px;
+            box-shadow:0 4px 12px rgba(232,134,52,0.35);
+            letter-spacing:0.04em;
+        }
+        #hg-steps {
+            display:flex; align-items:center; justify-content:center;
+            gap:0; flex-wrap:nowrap; margin-bottom:24px;
+            background:#f8f5f0; border-radius:14px; padding:14px 10px;
+            border:2px solid #e5ddd2; overflow-x:auto;
+        }
+        .hg-step {
+            display:flex; flex-direction:column; align-items:center;
+            font-size:12px; font-weight:700; padding:6px 12px;
+            border-radius:10px; white-space:nowrap; gap:4px;
+            min-width:64px;
+        }
+        .hg-step-num {
+            width:28px; height:28px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            font-size:13px; font-weight:900;
+        }
+        .hg-step-done { color:#5b8c3e; }
+        .hg-step-done .hg-step-num { background:#5b8c3e; color:#fff; }
+        .hg-step-active { color:#e88634; }
+        .hg-step-active .hg-step-num { background:#e88634; color:#fff; box-shadow:0 0 0 3px rgba(232,134,52,0.2); }
+        .hg-step-future { color:#bbb; }
+        .hg-step-future .hg-step-num { background:#e0ddd8; color:#999; }
+        .hg-step-arrow { color:#d0c8be; font-size:16px; flex-shrink:0; margin:0 2px; padding-bottom:18px; }
+        .hg-rv-card { background:#fff; border:1px solid #e5ddd2; border-radius:12px; padding:18px 16px; margin-bottom:14px; box-shadow:0 2px 6px rgba(107,94,79,0.05); }
+        .hg-rv-card-title { font-size:13px; font-weight:700; color:#5b8c3e; margin-bottom:14px; display:flex; align-items:center; gap:6px; }
+        .hg-rv-card-title-icon { width:22px; height:22px; border-radius:5px; background:#eef5e6; display:flex; align-items:center; justify-content:center; font-size:12px; }
+        .hg-rv-field { margin-bottom:12px; }
+        .hg-rv-label { display:block; font-size:13px; font-weight:600; color:#6b5e4f; margin-bottom:4px; }
+        .hg-rv-label .req { color:#c0392b; font-size:11px; font-weight:700; margin-left:4px; }
+        .hg-rv-input { width:100%; padding:11px 12px; background:#faf7f2; border:1px solid #e5ddd2; border-radius:8px; color:#3d3529; font-size:16px; outline:none; box-sizing:border-box; font-family:inherit; }
+        .hg-rv-input:focus { border-color:#5b8c3e; box-shadow:0 0 0 2px rgba(91,140,62,0.15); }
+        .hg-rv-input.error { border-color:#c0392b; }
+        .hg-rv-err { font-size:11px; color:#c0392b; margin-top:3px; }
+        textarea.hg-rv-input { min-height:60px; resize:vertical; }
+        .hg-rv-radio-group { display:flex; flex-direction:column; gap:5px; }
+        .hg-rv-radio { display:flex; align-items:center; gap:8px; padding:9px 10px; border-radius:7px; cursor:pointer; border:1.5px solid #f0ebe3; background:#faf7f2; transition:all 0.15s; }
+        .hg-rv-radio.active { background:#eef5e6; border-color:#5b8c3e; }
+        .hg-rv-radio-dot { width:16px; height:16px; border-radius:50%; border:2px solid #ccc; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .hg-rv-radio.active .hg-rv-radio-dot { border-color:#5b8c3e; }
+        .hg-rv-radio-dot-inner { width:8px; height:8px; border-radius:50%; background:#5b8c3e; display:none; }
+        .hg-rv-radio.active .hg-rv-radio-dot-inner { display:block; }
+        .hg-rv-radio-text { font-size:13px; color:#3d3529; }
+        .hg-rv-radio.active .hg-rv-radio-text { color:#5b8c3e; font-weight:600; }
+        .hg-rv-check { display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:6px; border-radius:10px; cursor:pointer; border:2px solid #e2e8f0; background:#f8fafc; transition:all 0.15s; }
+        .hg-rv-check.active { background:#ecfdf5; border-color:#6ee7b7; }
+        .hg-rv-check-box { width:20px; height:20px; border-radius:4px; border:2px solid #cbd5e1; background:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .hg-rv-check.active .hg-rv-check-box { background:#10b981; border-color:#10b981; }
+        .hg-rv-check-text { font-size:14px; font-weight:600; color:#475569; }
+        .hg-rv-check.active .hg-rv-check-text { color:#065f46; }
+        .hg-rv-btn-green { width:100%; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,#5b8c3e,#6fa34a); color:#fff; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 3px 12px rgba(91,140,62,0.25); font-family:inherit; }
+        .hg-rv-btn-orange { width:100%; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,#e88634,#f5a623); color:#fff; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 3px 12px rgba(232,134,52,0.25); font-family:inherit; }
+        .hg-rv-btn-ghost { width:100%; padding:12px; border:1px solid #e5ddd2; border-radius:10px; background:#fff; color:#6b5e4f; font-size:14px; cursor:pointer; margin-top:8px; font-family:inherit; }
+        .hg-rv-btn-link { background:none; border:none; color:#5b8c3e; font-weight:700; font-size:13px; cursor:pointer; padding:0; font-family:inherit; }
+        #hg-cal-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:8px; }
+        #hg-cal-table { border-collapse:collapse; width:100%; min-width:360px; table-layout:fixed; font-size:11px; }
+        #hg-cal-table th,#hg-cal-table td { border:1px solid #e0e0e0; text-align:center; padding:0; }
+        #hg-cal-table .time-cell { background:#fafafa; padding:5px 2px; font-weight:700; font-size:11px; color:#3d3529; width:42px; }
+        .cal-btn-avail { background:transparent; border:none; width:100%; padding:5px 0; cursor:pointer; font-size:18px; font-weight:900; color:#e0004e; line-height:1; }
+        .hg-confirm-row { display:flex; gap:8px; padding:8px 0; border-bottom:1px solid #f0ebe3; }
+        .hg-confirm-label { font-size:11px; color:#8a7d6e; min-width:130px; flex-shrink:0; padding-top:1px; }
+        .hg-confirm-val { font-size:13px; color:#3d3529; flex:1; }
+        .hg-confirm-val.hl { font-weight:700; color:#5b8c3e; }
+        .hg-rv-info { background:#e8f1fd; border:1px solid rgba(26,107,204,0.2); border-radius:8px; padding:10px 14px; font-size:12px; color:#1a6bcc; margin-bottom:12px; line-height:1.7; }
+        .hg-rv-err-box { background:#fdecea; border-left:4px solid #c0392b; border-radius:8px; padding:12px 14px; margin-top:10px; }
+        .hg-rv-err-box-title { font-size:13px; font-weight:700; color:#c0392b; margin-bottom:4px; }
+        .hg-rv-err-box-item { font-size:12px; color:#c0392b; }
+        @keyframes hgFadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+        /* ============================================================
+           レスポンシブ強化・プロ仕様スタイル追加
+        ============================================================ */
+        /* カレンダーテーブルのフォントサイズ底上げ */
+        #hg-cal-table { font-size:13px !important; }
+        #hg-cal-table .time-cell { font-size:13px !important; width:46px !important; padding:6px 3px !important; }
+        /* 予約フォーム全体のフォントサイズ底上げ */
+        .hg-rv-label { font-size:15px !important; font-weight:700 !important; margin-bottom:6px !important; }
+        .hg-rv-label .req { font-size:13px !important; }
+        .hg-rv-input { font-size:16px !important; padding:13px 14px !important; border-radius:10px !important; }
+        .hg-rv-radio-text { font-size:15px !important; line-height:1.4 !important; }
+        .hg-rv-radio { padding:12px 14px !important; border-radius:10px !important; margin-bottom:2px; }
+        .hg-rv-check-text { font-size:15px !important; }
+        .hg-rv-check { padding:12px 14px !important; border-radius:12px !important; }
+        .hg-rv-card-title { font-size:16px !important; font-weight:800 !important; padding-bottom:10px; border-bottom:2px solid #f0ebe3; margin-bottom:16px !important; }
+        .hg-rv-card { padding:20px 18px !important; border-radius:14px !important; margin-bottom:16px !important; }
+        .hg-rv-err { font-size:13px !important; margin-top:5px !important; }
+        .hg-rv-btn-green,.hg-rv-btn-orange { font-size:17px !important; padding:16px !important; border-radius:12px !important; letter-spacing:0.03em; }
+        .hg-rv-btn-ghost { font-size:15px !important; padding:14px !important; border-radius:12px !important; }
+        .hg-rv-btn-link { font-size:15px !important; }
+        .hg-rv-info { font-size:14px !important; padding:12px 16px !important; }
+        .hg-confirm-label { font-size:13px !important; min-width:140px !important; }
+        .hg-confirm-val { font-size:15px !important; }
+        /* ステップインジケータ */
+        .hg-step { font-size:13px !important; padding:5px 14px !important; }
+        .hg-step-arrow { font-size:13px !important; }
+        #hg-steps { margin-bottom:20px !important; gap:6px !important; }
+        /* カレンダー○ボタン */
+        .cal-btn-avail { font-size:20px !important; padding:7px 0 !important; }
+        /* フィールド間隔 */
+        .hg-rv-field { margin-bottom:18px !important; }
+
+        .hg-rv-err-box-title { font-size:15px !important; }
+        .hg-rv-err-box-item { font-size:14px !important; margin-top:4px; }
+        .hg-rv-err-box { padding:14px 16px !important; }
+        /* エラーメッセージ */
+        .hg-rv-err { font-size:13px !important; }
+        /* キャンセル案内カード */
+        .hg-rv-card[style*="border-left:4px solid #e88634"] { padding:16px 18px !important; }
+
+        @media (max-width:600px) {
+            .item-card { flex:1 1 100%; }
+            .hg-family-header { flex-direction:column; text-align:center; }
+            .hg-tel-main { font-size:1.9rem !important; }
+            .hg-greeting h3 { font-size:1.3rem !important; }
+            .hg-greeting { padding:35px 20px !important; }
+            #hg-reserve-wrap { padding:0 12px 40px !important; }
+            .hg-rv-card { padding:16px 14px !important; }
+            .hg-rv-btn-green,.hg-rv-btn-orange { font-size:16px !important; padding:15px !important; }
+            #hg-cal-table { font-size:12px !important; }
+            #hg-cal-table .time-cell { width:38px !important; font-size:12px !important; }
+            .cal-btn-avail { font-size:18px !important; }
+        }
+        @media (min-width:800px) {
+            .hg-vehicle-container { flex-direction:row !important; align-items:flex-start; }
+            .hg-vehicle-img-box { flex:0 0 45%; }
+            .hg-vehicle-info { flex:1; }
+        }
+
+
+        /* もし予約が埋まっていたら */
+        .hg-fallback-box {
+            margin: 0 20px 40px;
+            border: 2px dashed #90caf9;
+            border-radius: 14px;
+            background: #f0f7ff;
+            padding: 24px 20px;
+        }
+        .hg-fallback-inner { max-width: 600px; margin: 0 auto; text-align: center; }
+        .hg-fallback-title {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            font-size: 1.1rem; font-weight: 800; color: #1565c0;
+            margin-bottom: 12px;
+        }
+        .hg-fallback-icon { font-size: 1.3rem; }
+        .hg-fallback-text { font-size: 0.95rem; color: #444; line-height: 1.9; margin-bottom: 16px; }
+        .hg-fallback-text strong { color: #1565c0; }
+        .hg-fallback-tel {
+            display: inline-block; font-size: 1.7rem; font-weight: 900;
+            color: #1565c0; text-decoration: none; letter-spacing: 0.04em;
+            border-bottom: 2px solid #90caf9; padding-bottom: 2px;
+        }
+    </style>
+</head>
+<body>
+<div id="hakobite-green">
+
+    <div class="hg-announce-banner">
+        <span class="hg-announce-label">🎉 開始</span>
+        <p><strong>2026年2月 介護保険タクシー サービス開始！</strong>　ケアマネージャーまたは当事業所へお気軽にお問い合わせください。</p>
+    </div>
+    <div class="hg-area">📍 対応エリア: 中・西讃エリア (その他応相談)</div>
+    <div class="hg-ticket-banner">
+        <div class="hg-ticket-main">🎟️ 各市町のタクシー助成券がご利用いただけます（琴平町・まんのう町・善通寺市など）</div>
+        <div class="hg-ticket-sub">🎫 障害者割引や高齢者割引にも対応しております。</div>
+    </div>
+    <div class="hg-message-box">
+        <div class="hg-message-title"><span>🌿</span> 代表メッセージ</div>
+        <div class="hg-message-inner">
+            <div class="hg-message-photo">
+                <img src="http://www.hakobite-marugame.com/wp-content/uploads/2026/03/IMG_0137.jpg" alt="代表 林 主税">
+            </div>
+            <div class="hg-message-body">
+                <div class="hg-message-text">
+                    私は、介護士および生活相談員として10年の現場経験を積んでまいりました。「誰もが自分らしく暮らせる社会」という<strong class="hg-emphasize">社会正義の実現</strong>を目指し、この度ハコビテを始動しました。<br>
+                    丸亀事業所ではまだ単独での稼働ですが、本社の「ふじ介護タクシー」と協働し、善通寺で40年以上培われた祖父の代からの信頼を大切に守り、<strong class="hg-emphasize">中・西讃エリアの地域福祉の向上</strong>に全力で貢献してまいる所存です。
+                </div>
+                <div class="hg-message-footer">代表・社会福祉士　林 主税</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="hg-section-title"><h3>車両・設備のご紹介</h3></div>
+    <div class="hg-vehicle-container">
+        <div class="hg-vehicle-img-box">
+            <img src="http://www.hakobite-marugame.com/wp-content/uploads/2026/03/Gemini_Generated_Image_nge8ffnge8ffnge8.png" alt="ハコビテの福祉車両">
+        </div>
+        <div class="hg-vehicle-info">
+            <h4>トヨタ シエンタ（車いす仕様車）</h4>
+            <div class="hg-feature-grid">
+                <div class="hg-feature-item"><strong>リクライニング車いす対応</strong>通常の車いすはもちろん、フルリクライニングさせたまま安全にご乗車いただける設計です。</div>
+                <div class="hg-feature-item"><strong>最大2名様まで同乗可能</strong>車いすの方のすぐ横に1名様、助手席に1名様の計2名様まで添乗いただけます。</div>
+                <div class="hg-feature-item"><strong>車いす貸出サービス</strong>普通型・リクライニング車いすの貸出が可能です。</div>
+            </div>
+            <div class="hg-future-note">※ストレッチャー（寝台）については、ご相談にて承ります。</div>
+        </div>
+    </div>
+
+    <div class="hg-section-title"><h3>サービス一覧</h3></div>
+    <div class="hg-services">
+        <div class="hg-card">
+            <h4>🚗 介護タクシー</h4>
+            <p>通院・入退院・お買い物に。車椅子のままでのご乗車や、リクライニング車椅子のサポートも可能です。</p>
+            <span class="hg-pr-badge">✨ 迎車料金0円！どこから乗っても初乗り運賃スタート</span>
+            <div class="hg-price-box">
+                <span class="hg-price-main">初乗り 800円</span>
+                <span style="font-size:0.8rem; color:#666;">（1.5kmまで / メーター運賃）</span>
+            </div>
+        </div>
+        <div class="hg-card">
+            <h4>📦 配達・買い物</h4>
+            <p>重い飲み物や日用品を玄関まで。他のサービスと併用いただくと、配達料がお得になります。</p>
+            <div class="hg-price-box">
+                <span class="hg-price-main">500円</span>
+                <span class="hg-free-badge">🎁 他サービス併用で無料！</span>
+            </div>
+        </div>
+        <div class="hg-card">
+            <h4>🤝 付き添い・支援</h4>
+            <p>院内の付き添いや、電球交換・家具移動などの「ちょっとした困りごと」をサポートします。</p>
+            <div class="hg-price-box">
+                <span class="hg-price-main">1,500円</span>
+                <span style="font-size:0.8rem; color:#666;">（30分単位）</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="shop-list-container">
+        <div class="shop-title-area">
+            <span class="shop-name">【提携店】リカーショップはやし 取扱商品</span>
+            <span style="font-size:0.9rem; color:#555;">重たい飲料ケースも、玄関先までお届けします。</span>
+        </div>
+        <div class="item-grid">
+            <div class="item-card"><div class="item-icon">🍺</div><div><span class="item-cat">お酒・飲料</span><span class="item-detail">ビール、日本酒、焼酎、お茶、コーヒーなど</span></div></div>
+            <div class="item-card"><div class="item-icon">🚬</div><div><span class="item-cat">たばこ</span><span class="item-detail">各種銘柄を取り揃えております</span></div></div>
+            <div class="item-card"><div class="item-icon">🧂</div><div><span class="item-cat">食品・調味料</span><span class="item-detail">醤油、塩、マヨネーズ、カップ麺など</span></div></div>
+            <div class="item-card"><div class="item-icon">🧻</div><div><span class="item-cat">日用品</span><span class="item-detail">トイレットペーパー、洗剤、乾電池、電球など</span></div></div>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin: 40px 20px 60px;">
+        <a href="https://hakobite-reserve.vercel.app/reserve" target="_blank" class="hg-btn-reserve" style="display:inline-block;padding:15px 40px;width:90%;max-width:500px;border-radius:50px;font-weight:bold;text-decoration:none;margin-bottom:16px;background:#0073d9;color:#fff;font-size:1.1rem;box-shadow:0 4px 10px rgba(0,115,217,0.35);box-sizing:border-box;">📅 Webで予約・空き状況を確認</a><br>
+        <a href="https://hakobite-reserve.vercel.app/price" target="_blank" class="hg-btn-sim" style="display:inline-block;padding:15px 40px;width:90%;max-width:500px;border-radius:50px;font-weight:bold;text-decoration:none;margin-bottom:16px;background:#f57f17;color:#fff;font-size:1.1rem;box-sizing:border-box;">🚕 料金シミュレーター</a><br>
+        <a href="https://www.hakobite-marugame.com/?page_id=22" class="hg-btn" style="display:inline-block;padding:15px 40px;width:90%;max-width:500px;border-radius:50px;font-weight:bold;text-decoration:none;margin-bottom:16px;background:#2e7d32;color:#fff;font-size:1.1rem;box-sizing:border-box;">📋 詳しい料金表を見る</a>
+    </div>
+
+    <div class="hg-contact-section">
+        <h3 style="color:#2e7d32; margin-bottom:15px;">ご予約・ご相談はお気軽に</h3>
+        <p style="font-size:0.95rem; margin-bottom:25px;">代表の林が直通で承ります</p>
+        <div class="hg-tel-box"><a href="tel:08049506821" class="hg-tel-main">080-4950-6821</a></div>
+        <p style="font-size:0.9rem; font-weight:bold;">受付: 8:00〜18:00 (日曜定休)</p>
+    </div>
+    <div class="hg-footer">
+        <span style="font-weight:bold; font-size:1.1rem;">ハコビテ<span class="hg-badge">社会福祉士</span></span>
+        <div style="margin-top:10px; font-size:0.85rem; color:#ccc;">
+            〒761-2403 香川県丸亀市綾歌町岡田西2072-1<br>
+            運営: 株式会社ふじLife Alliance 丸亀事業所<br>
+            代表: 林 主税
+        </div>
+        <div style="margin-top:20px; font-size:0.75rem; color:#888;">&copy; 2026 Hakobite.</div>
+    </div>
+</div>
+
+
+</body>
+</html>
