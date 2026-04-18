@@ -5,7 +5,7 @@ import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 // 運賃設定
 // ============================================================
 const FARE = {
-  baseFare: 800, meterFare: 100, meterDistance: 0.265,
+  baseFare: 800, meterFare: 100, meterDistance: 0.270,
   welfareFee: 1000, careFee: 500,
   wheelchair: { normal: 500, reclining: 700 }
 };
@@ -238,7 +238,7 @@ function PriceCalculator() {
               </div>
             </div>
             <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}`, background: C.cream, fontSize: 10, color: C.textMid, lineHeight: 1.6 }}>
-              初乗り: {FARE.baseFare}円 ｜ 加算: {FARE.meterFare}円/270m（全距離適用）<br />福祉車両代{fmt(FARE.welfareFee)}円は基本に含まれます
+              初乗り: {FARE.baseFare}円 ｜ 加算: {FARE.meterFare}円/275m（全距離適用）<br />福祉車両代{fmt(FARE.welfareFee)}円は基本に含まれます
               <div style={{ color: C.textLight, marginTop: 2 }}>※ 交通状況等により変動します</div>
             </div>
           </div>
