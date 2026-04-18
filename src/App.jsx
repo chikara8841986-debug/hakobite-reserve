@@ -5,7 +5,7 @@ import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 // 運賃設定
 // ============================================================
 const FARE = {
-  baseFare: 800, meterFare: 100, meterDistance: 0.270,
+  baseFare: 800, meterFare: 100, meterDistance: 0.265,
   welfareFee: 1000, careFee: 500,
   wheelchair: { normal: 500, reclining: 700 }
 };
