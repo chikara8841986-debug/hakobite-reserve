@@ -135,12 +135,29 @@ def get_slots():
         print(f"API Error: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/reserve', methods=['POST'])
+def _cors_headers():
+    return {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    }
+
+@app.route('/api/reserve', methods=['POST', 'OPTIONS'])
 def reserve():
+    # CORSプリフライト対応
+    if request.method == 'OPTIONS':
+        resp = app.make_response('')
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp, 204
+
     # IP制限チェック
     client_ip = get_client_ip()
     if not check_ip_limit(client_ip):
-        return jsonify({"error": "短時間に予約が集中しています。しばらく時間をおいてから再度お試しください。"}), 429
+        resp = jsonify({"error": "短時間に予約が集中しています。しばらく時間をおいてから再度お試しください。"})
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp, 429
 
     try:
         data = request.json
@@ -163,7 +180,8 @@ def reserve():
             'end': {'dateTime': end_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
         }
         calendar_id = os.environ.get("CALENDAR_ID", "chikara8841986@gmail.com")
-        service.events().insert(calendarId=calendar_id, body=event).execute()
+        created_event = service.events().insert(calendarId=calendar_id, body=event).execute()
+        calendar_event_id = created_event.get('id')
 
         # カレンダーへ移動時間（予約開始30分前）を追加
         travel_end_dt = start_dt
@@ -175,7 +193,8 @@ def reserve():
             'start': {'dateTime': travel_start_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
             'end': {'dateTime': travel_end_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
         }
-        service.events().insert(calendarId=calendar_id, body=travel_event).execute()
+        created_travel = service.events().insert(calendarId=calendar_id, body=travel_event).execute()
+        travel_event_id = created_travel.get('id')
 
         # LINE通知
         line_token = os.environ.get("LINE_TOKEN")
@@ -222,51 +241,60 @@ def reserve():
             except Exception as e:
                 print(f"Email Error: {e}")
 
-        # 業務管理アプリ（GAS）へ予約データを同期
-        gas_url = os.environ.get(
-            "GAS_URL",
-            "https://script.google.com/macros/s/AKfycbw6Ep8OOakgStBhAMd2P_3tbbf5EJN8e18GGbyoOWIc4dJlq4Wti1dazOjg5ygm61nG/exec"
-        )
-        try:
-            import time, random, string
-            new_id = f"{int(time.time() * 1000)}_{(''.join(random.choices(string.ascii_lowercase + string.digits, k=5)))}"
-            reservation_item = {
-                "id": new_id,
-                "createdAt": start_dt.isoformat(),
-                "customerName": name,
-                "customerPhone": data.get("tel", data.get("phone", "")),
-                "customerEmail": to_email,
-                "reservationDate": start_dt.isoformat(),
-                "serviceType": data.get("serviceType", "介護タクシー"),
-                "pickupLocation": data.get("from", data.get("pickupLocation", "")),
-                "dropoffLocation": data.get("to", data.get("dropoffLocation", "")),
-                "passengerCount": data.get("passengers", data.get("passengerCount", 1)),
-                "wheelchairNeeded": data.get("wheelchair", data.get("wheelchairNeeded", "不要")),
-                "careNotes": data.get("careNotes", ""),
-                "bookerType": data.get("bookerType", "本人"),
-                "staffName": data.get("bookerName", data.get("staffName", "")),
-                "staffTel": data.get("bookerTel", data.get("staffTel", "")),
-                "staffTelSameAsCustomer": data.get("bookerTelSame", False),
-                "familyHospitalStaffName": data.get("familyHospitalStaffName", ""),
-                "paymentMethod": data.get("payment", data.get("paymentMethod", "現金")),
-                "careReq": data.get("careReq", ""),
-                "memo": data.get("note", data.get("notes", data.get("memo", ""))),
-                "source": "reserve_app"
-            }
-            # GASにPOSTしてreservationsに追記させる
-            gas_payload = json.dumps({"addReservation": reservation_item}).encode("utf-8")
-            gas_req = urllib.request.Request(
-                gas_url,
-                data=gas_payload,
-                headers={"Content-Type": "application/json"},
-                method="POST"
+        # 業務管理アプリから呼ばれた場合はGAS同期をスキップ（業務管理アプリが別途syncToGASで全データを同期するため）
+        skip_gas = data.get("skipGasSync", False)
+        if not skip_gas:
+            # 業務管理アプリ（GAS）へ予約データを同期
+            gas_url = os.environ.get(
+                "GAS_URL",
+                "https://script.google.com/macros/s/AKfycbw6Ep8OOakgStBhAMd2P_3tbbf5EJN8e18GGbyoOWIc4dJlq4Wti1dazOjg5ygm61nG/exec"
             )
-            with urllib.request.urlopen(gas_req, timeout=10) as gas_res:
-                print(f"GAS sync: {gas_res.status}")
-        except Exception as e:
-            print(f"GAS Sync Error (non-fatal): {e}")
+            try:
+                import time, random, string
+                new_id = f"{int(time.time() * 1000)}_{(''.join(random.choices(string.ascii_lowercase + string.digits, k=5)))}"
+                reservation_item = {
+                    "id": new_id,
+                    "createdAt": start_dt.isoformat(),
+                    "customerName": name,
+                    "customerPhone": data.get("tel", data.get("phone", "")),
+                    "customerEmail": to_email,
+                    "reservationDate": start_dt.isoformat(),
+                    "serviceType": data.get("serviceType", "介護タクシー"),
+                    "pickupLocation": data.get("from", data.get("pickupLocation", "")),
+                    "dropoffLocation": data.get("to", data.get("dropoffLocation", "")),
+                    "passengerCount": data.get("passengers", data.get("passengerCount", 1)),
+                    "wheelchairNeeded": data.get("wheelchair", data.get("wheelchairNeeded", "不要")),
+                    "careNotes": data.get("careNotes", ""),
+                    "bookerType": data.get("bookerType", "本人"),
+                    "staffName": data.get("bookerName", data.get("staffName", "")),
+                    "staffTel": data.get("bookerTel", data.get("staffTel", "")),
+                    "staffTelSameAsCustomer": data.get("bookerTelSame", False),
+                    "familyHospitalStaffName": data.get("familyHospitalStaffName", ""),
+                    "paymentMethod": data.get("payment", data.get("paymentMethod", "現金")),
+                    "careReq": data.get("careReq", ""),
+                    "memo": data.get("note", data.get("notes", data.get("memo", ""))),
+                    "source": "reserve_app"
+                }
+                # GASにPOSTしてreservationsに追記させる
+                gas_payload = json.dumps({"addReservation": reservation_item}).encode("utf-8")
+                gas_req = urllib.request.Request(
+                    gas_url,
+                    data=gas_payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST"
+                )
+                with urllib.request.urlopen(gas_req, timeout=10) as gas_res:
+                    print(f"GAS sync: {gas_res.status}")
+            except Exception as e:
+                print(f"GAS Sync Error (non-fatal): {e}")
 
-        return jsonify({"status": "success"})
+        resp = jsonify({"status": "success", "calendarEventId": calendar_event_id, "travelEventId": travel_event_id})
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp
     except Exception as e:
         print(f"Reserve API Error: {e}")
-        return jsonify({"error": str(e)}), 500
+        resp = jsonify({"error": str(e)})
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp, 500
