@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hakobite-mgmt",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "C:\\Users\\chika\\Desktop\\ハコビテ\\業務管理アプリ\\hakobite-app\\dist", "--listen", "3333", "--no-clipboard"],
+      "port": 3333
+    }
+  ]
+}

@@ -267,6 +267,10 @@ function ReservationSystem() {
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [recaptchaToken, setRecaptchaToken] = useState(null);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualDate, setManualDate] = useState("");
+  const [manualHour, setManualHour] = useState("8");
+  const [manualMinute, setManualMinute] = useState("0");
 
   useEffect(() => {
     window.onRecaptchaSuccess = (token) => setRecaptchaToken(token);
@@ -837,6 +841,56 @@ function ReservationSystem() {
         <PriceLink />
         <Link to="/" style={{ color: C.green, fontWeight: 700, fontSize: 12, textDecoration: "none", display: "block", textAlign: "center", padding: 8, marginTop: 4 }}>← メニューへ戻る</Link>
       </div>
+
+      {/* 日時直接入力アイコン（隅に小さく） */}
+      <div style={{ textAlign: "right", padding: "0 14px 4px" }}>
+        <button onClick={() => setShowManualInput(true)}
+          style={{ background: "none", border: "none", color: "#ccc", fontSize: 16, cursor: "pointer", padding: "2px 4px", opacity: 0.5 }}
+          title="日時を直接入力">≡</button>
+      </div>
+
+      {/* 日時直接入力モーダル */}
+      {showManualInput && (
+        <div onClick={() => setShowManualInput(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, padding: "20px 16px 40px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>日時を直接指定</span>
+              <button onClick={() => setShowManualInput(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textLight }}>✕</button>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 4 }}>日付</label>
+              <input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)}
+                style={{ ...inp, fontSize: 15 }} />
+            </div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 4 }}>時</label>
+                <select value={manualHour} onChange={e => setManualHour(e.target.value)} style={{ ...inp, fontSize: 15 }}>
+                  {Array.from({ length: 11 }, (_, i) => i + 8).map(h => <option key={h} value={h}>{h}時</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 4 }}>分</label>
+                <select value={manualMinute} onChange={e => setManualMinute(e.target.value)} style={{ ...inp, fontSize: 15 }}>
+                  {Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{String(m).padStart(2, "0")}分</option>)}
+                </select>
+              </div>
+            </div>
+            <button onClick={() => {
+              if (!manualDate) { alert("日付を選択してください"); return; }
+              const d = new Date(manualDate);
+              d.setHours(parseInt(manualHour), parseInt(manualMinute), 0, 0);
+              if (d < new Date()) { alert("過去の日時は選択できません"); return; }
+              setSlot(d.toISOString());
+              setShowManualInput(false);
+              setStep("form");
+            }} style={bGreen}>この日時で予約へ進む</button>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   );
