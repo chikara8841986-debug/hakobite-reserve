@@ -276,15 +276,19 @@ def reserve():
                     "source": "reserve_app"
                 }
                 # GASにPOSTしてreservationsに追記させる
+                # text/plainで送るとGASがリダイレクト後もPOSTを維持できる
                 gas_payload = json.dumps({"addReservation": reservation_item}).encode("utf-8")
                 gas_req = urllib.request.Request(
                     gas_url,
                     data=gas_payload,
-                    headers={"Content-Type": "application/json"},
+                    headers={"Content-Type": "text/plain"},
                     method="POST"
                 )
-                with urllib.request.urlopen(gas_req, timeout=10) as gas_res:
-                    print(f"GAS sync: {gas_res.status}")
+                # GASはリダイレクトするのでfollow_redirectsが必要
+                opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler())
+                with opener.open(gas_req, timeout=15) as gas_res:
+                    gas_body = gas_res.read().decode("utf-8")
+                    print(f"GAS sync: {gas_res.status} / {gas_body[:200]}")
             except Exception as e:
                 print(f"GAS Sync Error (non-fatal): {e}")
 
