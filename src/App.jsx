@@ -306,7 +306,7 @@ function ReservationSystem() {
     duration: "30分",
     name: "", tel: "", email: "",
     serviceType: "介護タクシー",
-    from: "", to: "",
+    from: "", wardRoom: "", to: "",
     wheelchair: "利用なし",
     careReq: "車の乗降介助程度",
     passengers: "1名",
@@ -391,7 +391,7 @@ function ReservationSystem() {
       `■電話: ${bk.tel}`,
       `■メール: ${bk.email || "未入力"}`,
       bookerInfo + familyInfo + careNotesInfo,
-      `■お迎え: ${bk.from}`,
+      `■お迎え: ${bk.from}${bk.wardRoom ? `（${bk.wardRoom}）` : ""}`,
       `■目的地: ${bk.to}`,
       `■車椅子: ${bk.wheelchair}`,
       `■介助: ${bk.careReq}`,
@@ -514,6 +514,7 @@ function ReservationSystem() {
             <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, marginBottom: 4, paddingBottom: 4, borderBottom: `2px solid ${C.borderLight}` }}>📍 サービス・行程</div>
             <ConfirmRow label="サービス種別" value={bk.serviceType} />
             <ConfirmRow label="お迎え場所" value={bk.from} />
+            {bk.wardRoom && <ConfirmRow label="病棟・病室" value={bk.wardRoom} />}
             <ConfirmRow label="目的地" value={bk.to || "未入力"} />
           </div>
 
@@ -693,6 +694,7 @@ function ReservationSystem() {
             <ST icon="📍" title="サービス・行程" />
             <FF label="サービス種別" required><RG options={["介護タクシー", "買い物代行", "生活支援サービス", "安否確認・報告サービス", "その他"]} value={bk.serviceType} onChange={v => ub("serviceType", v)} /></FF>
             <FF label="お迎え・ご利用場所" required error={errors.from}><textarea placeholder="住所・施設名など" value={bk.from} onChange={e => { ub("from", e.target.value); setErrors(p => ({ ...p, from: "" })); }} style={{ ...inp, minHeight: 56, resize: "vertical", borderColor: errors.from ? C.red : C.border }} /></FF>
+            <FF label="病棟・病室（任意）"><input type="text" placeholder="例：○○病棟 △△号室" value={bk.wardRoom} onChange={e => ub("wardRoom", e.target.value)} style={inp} /></FF>
             <FF label="目的地"><textarea placeholder="住所・施設名など" value={bk.to} onChange={e => ub("to", e.target.value)} style={{ ...inp, minHeight: 56, resize: "vertical" }} /></FF>
           </div>
           <div style={card}>
