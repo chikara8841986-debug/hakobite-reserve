@@ -260,7 +260,7 @@ def reserve():
                     "customerEmail": to_email,
                     "reservationDate": start_dt.isoformat(),
                     "serviceType": data.get("serviceType", "介護タクシー"),
-                    "pickupLocation": data.get("from", data.get("pickupLocation", "")),
+                    "pickupLocation": data.get("from", data.get("pickupLocation", "")) + (f"（{data.get('wardRoom')}）" if data.get("wardRoom") else ""),
                     "dropoffLocation": data.get("to", data.get("dropoffLocation", "")),
                     "passengerCount": data.get("passengers", data.get("passengerCount", 1)),
                     "wheelchairNeeded": data.get("wheelchair", data.get("wheelchairNeeded", "不要")),

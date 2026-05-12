@@ -414,6 +414,7 @@ function ReservationSystem() {
           email: bk.email,
           tel: bk.tel,
           from: bk.from,
+          wardRoom: bk.wardRoom,
           to: bk.to,
           wheelchair: bk.wheelchair,
           passengers: bk.passengers,
