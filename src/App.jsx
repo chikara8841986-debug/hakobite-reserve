@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 
 // ============================================================
 // 運賃設定
@@ -1108,6 +1109,7 @@ export default function App() {
         <Route path="/price" element={<PriceCalculator />} />
         <Route path="/reserve" element={<ReservationSystem />} />
       </Routes>
+      <Analytics />
     </BrowserRouter>
   );
 }
