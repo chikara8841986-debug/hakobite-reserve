@@ -61,6 +61,7 @@ const GlobalStyle = () => (
     input,select,textarea,button{font-family:inherit;font-size:16px}
     @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     input::placeholder,textarea::placeholder{color:#b5a99a}
     a{color:inherit}
   `}</style>
@@ -261,6 +262,45 @@ function ReservationSystem() {
   const [step, setStep] = useState("slots");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState("");
+  const [draftAvailable, setDraftAvailable] = useState(false);
+
+  const DRAFT_KEY = "hakobite_reserve_draft_v1";
+  const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+  // 起動時にドラフトの有無をチェック
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      if (!obj || !obj.savedAt) return;
+      if (Date.now() - new Date(obj.savedAt).getTime() > DRAFT_MAX_AGE_MS) {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
+      setDraftAvailable(true);
+    } catch {}
+  }, []);
+
+  const restoreDraft = () => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const { bk: savedBk, slot: savedSlot } = JSON.parse(raw);
+      if (savedBk) setBk(savedBk);
+      if (savedSlot) {
+        setSlot(savedSlot);
+        setStep("form");
+      }
+      setDraftAvailable(false);
+    } catch {}
+  };
+
+  const discardDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    setDraftAvailable(false);
+  };
   const [slot, setSlot] = useState(null);
   const [wOff, setWOff] = useState(0);
   const [busy, setBusy] = useState([]);
@@ -394,6 +434,9 @@ function ReservationSystem() {
 
   const bookerRequiresName = ["ソーシャルワーカー", "ケアマネジャー", "家族・代理人", "施設担当者", "ふじ介護タクシー", "その他（本人以外）"].includes(bk.bookerType);
   const isFujiKaigo = bk.bookerType === "ふじ介護タクシー";
+  const isFamilyBooker = bk.bookerType === "家族・代理人";
+  const bookerNameLabel = isFamilyBooker ? "ご家族のお名前" : "ご担当者のお名前";
+  const bookerTelLabel = isFamilyBooker ? "ご家族の電話番号" : "ご担当者連絡先";
 
   const refreshBusy = () => {
     setLoading(true);
@@ -402,12 +445,21 @@ function ReservationSystem() {
 
   useEffect(() => { refreshBusy(); }, []);
 
+  // 入力中はドラフト自動保存（顧客情報を1つ以上入れたら）
+  useEffect(() => {
+    const hasContent = (bk.name || bk.tel || bk.from || bk.to || bk.email || bk.note || bk.careNotes);
+    if (!hasContent) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ bk, slot, savedAt: new Date().toISOString() }));
+    } catch {}
+  }, [bk, slot]);
+
   const validate = () => {
     const e = {};
     if (!bk.name.trim()) e.name = "お名前を入力してください";
     if (!bk.tel.trim()) e.tel = "電話番号を入力してください";
     if (!bk.from.trim()) e.from = "お迎え場所を入力してください";
-    if (bookerRequiresName && !isFujiKaigo && !bk.bookerName.trim()) e.bookerName = "ご担当者のお名前を入力してください";
+    if (bookerRequiresName && !isFujiKaigo && !bk.bookerName.trim()) e.bookerName = `${bookerNameLabel}を入力してください`;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -444,7 +496,7 @@ function ReservationSystem() {
     const dateStr8 = `${sD.getFullYear()}/${(sD.getMonth()+1).toString().padStart(2,"0")}/${sD.getDate().toString().padStart(2,"0")}`;
 
     const bookerInfo = bookerRequiresName
-      ? `■ご担当者のお名前: ${bk.bookerName}\n■ご担当者連絡先: ${bk.bookerTelSame ? bk.tel : bk.bookerTel}`
+      ? `■${bookerNameLabel}: ${bk.bookerName}\n■${bookerTelLabel}: ${bk.bookerTelSame ? bk.tel : bk.bookerTel}`
       : `■予約者区分: ${bk.bookerType}`;
     const familyInfo = isFujiKaigo ? `\n■家族・病院担当者名: ${bk.familyHospitalStaffName}` : "";
     const careNotesInfo = bk.careNotes ? `\n■ご利用に際しての留意事項: ${bk.careNotes}` : "";
@@ -466,6 +518,10 @@ function ReservationSystem() {
     ].join("\n");
 
     setSubmitting(true);
+    setSubmitProgress("📅 カレンダーに登録中...");
+    // 擬似進捗表示（バックエンドはステップを返さないので時間ベースで切替）
+    const t1 = setTimeout(() => setSubmitProgress("✉️ 確認メール送信中..."), 1800);
+    const t2 = setTimeout(() => setSubmitProgress("📊 業務管理に同期中..."), 3800);
     try {
       const r = await fetch("/api/reserve", {
         method: "POST",
@@ -499,6 +555,10 @@ function ReservationSystem() {
         })
       });
       if (r.ok) {
+        setSubmitProgress("✓ 完了！");
+        try { localStorage.removeItem(DRAFT_KEY); } catch {}
+        setDraftAvailable(false);
+        await new Promise(res => setTimeout(res, 400));
         setStep("success");
       } else if (r.status === 429) {
         alert("短時間に予約が集中しています。しばらく時間をおいてから再度お試しください。");
@@ -508,7 +568,10 @@ function ReservationSystem() {
     } catch {
       alert("通信エラーが発生しました。");
     } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
       setSubmitting(false);
+      setSubmitProgress("");
     }
   };
 
@@ -540,6 +603,16 @@ function ReservationSystem() {
     const endStr = eD ? `${eD.getHours()}:${eD.getMinutes().toString().padStart(2, "0")}` : "";
     return (
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "14px 14px 40px", animation: "slideUp 0.35s ease-out" }}>
+        {submitting && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <div style={{ background: "#fff", borderRadius: 18, padding: "28px 24px", maxWidth: 320, width: "100%", textAlign: "center", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}>
+              <div style={{ fontSize: 32, marginBottom: 12, animation: "spin 1.2s linear infinite", display: "inline-block" }}>⏳</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 8 }}>予約を送信しています</div>
+              <div style={{ fontSize: 13, color: C.textMid, minHeight: 20 }}>{submitProgress}</div>
+              <div style={{ fontSize: 11, color: C.textLight, marginTop: 14 }}>少々お待ちください…</div>
+            </div>
+          </div>
+        )}
         <button onClick={() => setStep("form")} style={{ background: "none", border: "none", color: C.green, fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 10, padding: 0 }}>← 入力内容を修正する</button>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 14, flexWrap: "wrap" }}>
@@ -570,8 +643,8 @@ function ReservationSystem() {
             <ConfirmRow label="電話番号" value={bk.tel} />
             <ConfirmRow label="メールアドレス" value={bk.email || "未入力"} />
             <ConfirmRow label="予約者区分" value={bk.bookerType} />
-            {bookerRequiresName && !isFujiKaigo && <ConfirmRow label="ご担当者のお名前" value={bk.bookerName} highlight />}
-            {bookerRequiresName && <ConfirmRow label="ご担当者連絡先" value={bk.bookerTelSame ? bk.tel + "（利用者と同じ）" : bk.bookerTel} />}
+            {bookerRequiresName && !isFujiKaigo && <ConfirmRow label={bookerNameLabel} value={bk.bookerName} highlight />}
+            {bookerRequiresName && <ConfirmRow label={bookerTelLabel} value={bk.bookerTelSame ? bk.tel + "（利用者と同じ）" : bk.bookerTel} />}
             {isFujiKaigo && bk.familyHospitalStaffName && <ConfirmRow label="家族・病院担当者名" value={bk.familyHospitalStaffName} />}
             {bk.careNotes && <ConfirmRow label="ご利用上の留意事項" value={bk.careNotes} />}
           </div>
@@ -709,17 +782,17 @@ function ReservationSystem() {
             {bookerRequiresName && (
               <>
                 {!isFujiKaigo && (
-                  <FF label="ご担当者のお名前" required error={errors.bookerName}>
+                  <FF label={bookerNameLabel} required error={errors.bookerName}>
                     <input
                       type="text"
-                      placeholder="ご担当者のお名前を入力"
+                      placeholder={`${bookerNameLabel}を入力`}
                       value={bk.bookerName}
                       onChange={e => { ub("bookerName", e.target.value); setErrors(p => ({ ...p, bookerName: "" })); }}
                       style={{ ...inp, borderColor: errors.bookerName ? C.red : C.border }}
                     />
                   </FF>
                 )}
-                <FF label="ご担当者連絡先">
+                <FF label={bookerTelLabel}>
                   <div style={{ marginBottom: 6 }}>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.textMid, cursor: "pointer" }}>
                       <input
@@ -734,7 +807,7 @@ function ReservationSystem() {
                   {!bk.bookerTelSame && (
                     <input
                       type="tel"
-                      placeholder="ご担当者の電話番号"
+                      placeholder={isFamilyBooker ? "ご家族の電話番号" : "ご担当者の電話番号"}
                       value={bk.bookerTel}
                       onChange={e => ub("bookerTel", e.target.value)}
                       style={inp}
@@ -820,6 +893,17 @@ function ReservationSystem() {
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 0 30px", overflow: "hidden" }}>
+      {draftAvailable && (
+        <div style={{ padding: "8px 12px 0" }}>
+          <div style={{ background: "#fef9c3", border: "1px solid #facc15", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#854d0e", marginBottom: 6 }}>📝 前回の入力途中のデータがあります</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={restoreDraft} style={{ flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, background: "#ca8a04", color: "white", border: "none", cursor: "pointer" }}>続きから再開する</button>
+              <button onClick={discardDraft} style={{ flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, background: "white", color: "#854d0e", border: "1px solid #facc15", cursor: "pointer" }}>新規で始める</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ padding: "8px 12px 0" }}>
         <div style={{ background: C.orangeBg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", marginBottom: 6 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.orange, marginBottom: 4 }}>📱 電話不要！3分でかんたん予約</div>
