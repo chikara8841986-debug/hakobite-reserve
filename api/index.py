@@ -319,8 +319,9 @@ def reserve():
                     method="POST"
                 )
                 # GASはリダイレクトするのでfollow_redirectsが必要
+                # GAS側で予約シートのみ更新するよう最適化したのでタイムアウトを短縮
                 opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler())
-                with opener.open(gas_req, timeout=15) as gas_res:
+                with opener.open(gas_req, timeout=8) as gas_res:
                     gas_body = gas_res.read().decode("utf-8")
                     print(f"GAS sync: {gas_res.status} / {gas_body[:200]}")
             except Exception as e:
