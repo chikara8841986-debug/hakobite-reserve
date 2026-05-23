@@ -271,6 +271,71 @@ function ReservationSystem() {
   const [manualDate, setManualDate] = useState("");
   const [manualHour, setManualHour] = useState("8");
   const [manualMinute, setManualMinute] = useState("0");
+  const [showPinPrompt, setShowPinPrompt] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [pinAuthed, setPinAuthed] = useState(() => {
+    try { return sessionStorage.getItem("hakobite_admin_pin") === "1"; } catch { return false; }
+  });
+  const [repeaters, setRepeaters] = useState([]);
+  const [repeatersLoading, setRepeatersLoading] = useState(false);
+  const [selectedRepeaterId, setSelectedRepeaterId] = useState("");
+
+  const ADMIN_PIN = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_ADMIN_PIN) || "8841";
+
+  const fetchRepeaters = async () => {
+    if (repeaters.length > 0 || repeatersLoading) return;
+    setRepeatersLoading(true);
+    try {
+      const res = await fetch("/api/repeaters", { cache: "no-store" });
+      const data = await res.json();
+      setRepeaters(Array.isArray(data.repeaters) ? data.repeaters : []);
+    } catch (e) {
+      console.warn("リピーター取得失敗:", e);
+    } finally {
+      setRepeatersLoading(false);
+    }
+  };
+
+  const openManualInput = () => {
+    if (pinAuthed) {
+      setShowManualInput(true);
+      fetchRepeaters();
+    } else {
+      setPinInput("");
+      setPinError("");
+      setShowPinPrompt(true);
+    }
+  };
+
+  const submitPin = () => {
+    if (pinInput === ADMIN_PIN) {
+      setPinAuthed(true);
+      try { sessionStorage.setItem("hakobite_admin_pin", "1"); } catch {}
+      setShowPinPrompt(false);
+      setShowManualInput(true);
+      fetchRepeaters();
+    } else {
+      setPinError("PINコードが正しくありません");
+    }
+  };
+
+  const applyRepeaterToBk = (id) => {
+    if (!id) return;
+    const r = repeaters.find(x => String(x.id) === String(id));
+    if (!r) return;
+    setBk(prev => ({
+      ...prev,
+      name: r.customerName || prev.name,
+      tel: r.customerPhone || prev.tel,
+      email: r.customerEmail || prev.email,
+      from: r.pickupLocation || prev.from,
+      to: r.dropoffLocation || prev.to,
+      serviceType: r.serviceType || prev.serviceType,
+      wheelchair: r.wheelchairNeeded || prev.wheelchair,
+      careNotes: r.careNotes || prev.careNotes,
+    }));
+  };
 
   useEffect(() => {
     window.onRecaptchaSuccess = (token) => setRecaptchaToken(token);
@@ -844,21 +909,67 @@ function ReservationSystem() {
 
       {/* 日時直接入力アイコン（隅に小さく） */}
       <div style={{ textAlign: "right", padding: "0 14px 4px" }}>
-        <button onClick={() => setShowManualInput(true)}
+        <button onClick={openManualInput}
           style={{ background: "none", border: "none", color: "#ccc", fontSize: 16, cursor: "pointer", padding: "2px 4px", opacity: 0.5 }}
           title="日時を直接入力">≡</button>
       </div>
+
+      {/* PIN入力モーダル */}
+      {showPinPrompt && (
+        <div onClick={() => setShowPinPrompt(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 360, padding: "22px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>管理者PIN</span>
+              <button onClick={() => setShowPinPrompt(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textLight }}>✕</button>
+            </div>
+            <p style={{ fontSize: 12, color: C.textMid, marginBottom: 10 }}>この機能は管理者専用です。PINを入力してください。</p>
+            <input type="password" inputMode="numeric" autoFocus
+              value={pinInput}
+              onChange={e => { setPinInput(e.target.value); setPinError(""); }}
+              onKeyDown={e => { if (e.key === "Enter") submitPin(); }}
+              placeholder="PINコード"
+              style={{ ...inp, fontSize: 18, letterSpacing: 4, textAlign: "center", borderColor: pinError ? C.red : C.border }} />
+            {pinError && <div style={{ fontSize: 12, color: C.red, marginTop: 6 }}>{pinError}</div>}
+            <button onClick={submitPin} style={{ ...bGreen, marginTop: 14 }}>認証する</button>
+          </div>
+        </div>
+      )}
 
       {/* 日時直接入力モーダル */}
       {showManualInput && (
         <div onClick={() => setShowManualInput(false)}
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, padding: "20px 16px 40px" }}>
+            style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, padding: "20px 16px 40px", maxHeight: "85vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>日時を直接指定</span>
               <button onClick={() => setShowManualInput(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textLight }}>✕</button>
             </div>
+
+            {/* リピーター選択 */}
+            <div style={{ marginBottom: 14, padding: 12, background: C.greenBg, borderRadius: 10, border: `1px solid ${C.border}` }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 6 }}>
+                ⭐ リピーターから選択（任意）{repeatersLoading && " 読込中..."}
+              </label>
+              <select value={selectedRepeaterId}
+                onChange={e => { setSelectedRepeaterId(e.target.value); applyRepeaterToBk(e.target.value); }}
+                style={{ ...inp, fontSize: 14 }}>
+                <option value="">— 選択しない —</option>
+                {repeaters.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.customerName || "（名前なし）"}{r.customerPhone ? ` / ${r.customerPhone}` : ""}
+                  </option>
+                ))}
+              </select>
+              {selectedRepeaterId && (
+                <div style={{ fontSize: 11, color: C.green, marginTop: 6, fontWeight: 700 }}>
+                  ✓ 次の画面で名前・電話・住所などが自動入力されます
+                </div>
+              )}
+            </div>
+
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 4 }}>日付</label>
               <input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)}
@@ -883,6 +994,7 @@ function ReservationSystem() {
               const d = new Date(manualDate);
               d.setHours(parseInt(manualHour), parseInt(manualMinute), 0, 0);
               if (d < new Date()) { alert("過去の日時は選択できません"); return; }
+              if (selectedRepeaterId) applyRepeaterToBk(selectedRepeaterId);
               setSlot(d.toISOString());
               setShowManualInput(false);
               setStep("form");
