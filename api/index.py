@@ -138,9 +138,43 @@ def get_slots():
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
     }
+
+
+@app.route('/api/repeaters', methods=['GET', 'OPTIONS'])
+def get_repeaters():
+    if request.method == 'OPTIONS':
+        resp = jsonify({})
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp
+
+    try:
+        gas_url = os.environ.get(
+            "GAS_URL",
+            "https://script.google.com/macros/s/AKfycbw6Ep8OOakgStBhAMd2P_3tbbf5EJN8e18GGbyoOWIc4dJlq4Wti1dazOjg5ygm61nG/exec"
+        )
+        opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler())
+        req = urllib.request.Request(gas_url, method="GET", headers={"cache-control": "no-cache"})
+        with opener.open(req, timeout=15) as gas_res:
+            body = gas_res.read().decode("utf-8")
+            data = json.loads(body) if body else {}
+        repeaters = data.get("repeaters", []) if isinstance(data, dict) else []
+        active = [r for r in repeaters if isinstance(r, dict) and not r.get("isArchived")]
+        # 表示用に名前順でソート
+        active.sort(key=lambda r: (r.get("customerName") or ""))
+        resp = jsonify({"repeaters": active})
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp
+    except Exception as e:
+        print(f"Repeaters API Error: {e}")
+        resp = jsonify({"error": str(e), "repeaters": []})
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp, 500
 
 @app.route('/api/reserve', methods=['POST', 'OPTIONS'])
 def reserve():
