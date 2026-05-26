@@ -77,6 +77,11 @@ const GlobalStyle = () => (
     .resv-today-header{background:#10b981 !important;color:#fff !important;position:relative}
     .resv-today-header::after{content:"今日";position:absolute;top:1px;right:2px;font-size:8px;font-weight:800;background:#fff;color:#10b981;padding:1px 3px;border-radius:99px;line-height:1}
 
+    /* 日付ヘッダーをスクロール時も画面上端に固定（縦スクロール対応） */
+    .resv-calendar-table thead th{position:sticky;z-index:5;box-shadow:0 1px 0 #e0e0e0}
+    .resv-calendar-table thead tr:first-child th{top:0}
+    .resv-calendar-table thead tr:nth-child(2) th{top:22px}
+
     /* ===== 「×」セルの理由色分け ===== */
     .resv-past-cell{background:#f1f5f9 !important;color:#cbd5e1 !important}
     .resv-busy-cell{background:#fff !important;color:#ef4444 !important}
@@ -991,10 +996,10 @@ function ReservationSystem() {
           <div style={{ textAlign: "center", padding: "16px 0 0", color: C.textLight, fontSize: 12 }}>空き状況を読み込み中...</div>
         </div>
       ) : (
-        <div className="resv-calendar-wrap" style={{ padding: "6px 6px 0", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <table className="resv-calendar-table" style={{ borderCollapse: "collapse", width: "100%", minWidth: 360, tableLayout: "fixed", fontSize: 11 }}>
+        <div className="resv-calendar-wrap" style={{ padding: "6px 6px 0" }}>
+          <table className="resv-calendar-table" style={{ borderCollapse: "collapse", width: "100%", minWidth: 320, tableLayout: "fixed", fontSize: 11 }}>
             <colgroup>
-              <col style={{ width: 42 }} />
+              <col style={{ width: 38 }} />
               {wd.map((_, i) => <col key={i} />)}
             </colgroup>
             <thead>
@@ -1061,7 +1066,6 @@ function ReservationSystem() {
           <span><span style={{ color: C.pink, fontWeight: 700, fontSize: 14 }}>○</span> 予約可（タップ）</span>
           <span><span style={{ color: "#ef4444", fontWeight: 700, fontSize: 14 }}>×</span> 予約済</span>
           <span><span style={{ color: "#cbd5e1", fontWeight: 700, fontSize: 14 }}>×</span> 過去</span>
-          <span style={{ color: "#94a3b8" }}>※左右にスクロール可</span>
         </div>
         <PriceLink />
         <Link to="/" style={{ color: C.green, fontWeight: 700, fontSize: 12, textDecoration: "none", display: "block", textAlign: "center", padding: 8, marginTop: 4 }}>← メニューへ戻る</Link>
