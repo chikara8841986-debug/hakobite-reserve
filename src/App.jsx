@@ -65,6 +65,33 @@ const GlobalStyle = () => (
     @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     input::placeholder,textarea::placeholder{color:#b5a99a}
     a{color:inherit}
+
+    /* キーボード操作のフォーカスリング（PCで効く / スマホタップでは出ない） */
+    button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid ${C.green};outline-offset:2px;border-radius:6px}
+
+    /* ===== カレンダー ===== */
+    .resv-slot-btn{background:transparent;border:none;width:100%;min-height:44px;padding:8px 0;cursor:pointer;font-size:18px;font-weight:900;color:#e0004e;text-shadow:0 0 1px #e0004e;transition:background 0.12s ease, transform 0.06s ease}
+    .resv-slot-btn:active{transform:scale(0.95)}
+    @media(hover:hover){.resv-slot-btn:hover{background:#fff0f4}}
+    .resv-today-col{background:#ecfdf5 !important}
+    .resv-today-header{background:#10b981 !important;color:#fff !important;position:relative}
+    .resv-today-header::after{content:"今日";position:absolute;top:1px;right:2px;font-size:8px;font-weight:800;background:#fff;color:#10b981;padding:1px 3px;border-radius:99px;line-height:1}
+
+    /* ===== 「×」セルの理由色分け ===== */
+    .resv-past-cell{background:#f1f5f9 !important;color:#cbd5e1 !important}
+    .resv-busy-cell{background:#fff !important;color:#ef4444 !important}
+
+    /* ===== スティッキーフッター（フォーム送信ボタン）===== */
+    .resv-sticky-footer{position:sticky;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(250,247,240,0) 0,${C.cream} 22%);padding:10px 0 calc(env(safe-area-inset-bottom,0px) + 8px);margin-top:8px;z-index:5}
+    @media(min-width:900px){.resv-sticky-footer{position:static;background:transparent;padding:0;margin-top:14px}}
+
+    /* PC幅でカレンダーをやや広く */
+    @media(min-width:768px){
+      .resv-calendar-wrap{max-width:720px;margin:0 auto}
+      .resv-calendar-table{font-size:13px}
+      .resv-calendar-table th,.resv-calendar-table td{padding:6px 0}
+      .resv-slot-btn{font-size:20px;min-height:48px}
+    }
   `}</style>
 );
 
@@ -95,9 +122,10 @@ function ST({ icon, title }) {
 }
 function FF({ label, required: r, children, error }) {
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div data-error={error ? "true" : undefined} style={{ marginBottom: 12, scrollMarginTop: 80 }}>
       <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: error ? C.red : C.textMid, marginBottom: 4 }}>
-        {label}{r && <span style={{ color: C.red, fontSize: 11, fontWeight: 700, marginLeft: 4 }}>（必須）</span>}
+        {label}
+        {r && <span style={{ color: "#fff", background: C.red, fontSize: 10, fontWeight: 800, marginLeft: 6, padding: "1px 6px", borderRadius: 99 }}>必須</span>}
       </label>
       {children}
       {error && <div style={{ fontSize: 11, color: C.red, marginTop: 3 }}>⚠ {error}</div>}
@@ -471,6 +499,15 @@ function ReservationSystem() {
     if (validate()) {
       setRecaptchaToken(null); // 確認画面に来るたびにリセット
       setStep("confirm");
+    } else {
+      // バリデーション失敗：最初のエラー要素までスクロール
+      setTimeout(() => {
+        const firstError = document.querySelector('[data-error="true"]') || document.querySelector('input[style*="rgb(239, 68, 68)"]');
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (typeof firstError.focus === 'function') firstError.focus({ preventScroll: true });
+        }
+      }, 50);
     }
   };
 
@@ -866,13 +903,15 @@ function ReservationSystem() {
           </div>
 
           {/* キャンセル案内 */}
-          <div style={{ ...card, background: C.cream, borderLeft: `4px solid ${C.orange}`, padding: "12px 14px" }}>
+          <div style={{ ...card, background: C.cream, borderLeft: `4px solid ${C.orange}`, padding: "12px 14px", marginBottom: 80 }}>
             <div style={{ fontSize: 13, color: C.textMid, lineHeight: 1.7 }}>
               📞 <strong>ご予約のキャンセルは電話にて承ります。</strong>
             </div>
           </div>
 
-          <button type="submit" style={bOrange}>内容を確認する →</button>
+          <div className="resv-sticky-footer">
+            <button type="submit" style={bOrange}>内容を確認する →</button>
+          </div>
 
           {submitted && Object.keys(errors).length > 0 && (
             <div style={{ ...card, background: C.redBg, borderColor: C.red + "40", borderLeft: `4px solid ${C.red}`, padding: "12px 14px", marginTop: 10 }}>
@@ -891,6 +930,14 @@ function ReservationSystem() {
   // --- カレンダー ---
   const now = new Date();
   const yearMonth = `${wd[0].getFullYear()}年${wd[0].getMonth() + 1}月`;
+  const todayMs = new Date(new Date().setHours(0,0,0,0)).getTime();
+  const showingToday = wd.some(d => new Date(d).setHours(0,0,0,0) === todayMs);
+  const todayColIdx = wd.findIndex(d => new Date(d).setHours(0,0,0,0) === todayMs);
+  const nowHourMinutes = now.getHours() * 60 + now.getMinutes();
+  // 現在時刻に最も近い「以降」のスロットindex（自動スクロール用）
+  const nowSlotIdx = showingToday
+    ? Math.max(0, ts.findIndex(t => (t.h * 60 + t.m) >= nowHourMinutes))
+    : -1;
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 0 30px", overflow: "hidden" }}>
@@ -916,22 +963,36 @@ function ReservationSystem() {
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 12px 0" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 12px 0", gap: 6 }}>
         <button onClick={() => setWOff(p => Math.max(0, p - 1))} disabled={wOff <= 0}
-          style={{ padding: "7px 14px", border: `1px solid ${wOff <= 0 ? "#ddd" : "#ccc"}`, borderRadius: 6, background: C.white, color: wOff <= 0 ? "#bbb" : C.text, fontSize: 12, fontWeight: 600, cursor: wOff <= 0 ? "default" : "pointer" }}>
-          ＜ 前の一週間
+          style={{ padding: "9px 14px", minHeight: 40, border: `1px solid ${wOff <= 0 ? "#ddd" : "#ccc"}`, borderRadius: 8, background: C.white, color: wOff <= 0 ? "#bbb" : C.text, fontSize: 12, fontWeight: 700, cursor: wOff <= 0 ? "default" : "pointer" }}>
+          ＜ 前の週
         </button>
+        {wOff > 0 && (
+          <button onClick={() => setWOff(0)}
+            style={{ padding: "9px 14px", minHeight: 40, border: `1px solid ${C.green}`, borderRadius: 8, background: C.greenBg, color: C.green, fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+            ⌂ 今週へ
+          </button>
+        )}
         <button onClick={() => setWOff(p => p + 1)}
-          style={{ padding: "7px 14px", border: "1px solid #ccc", borderRadius: 6, background: C.white, color: C.text, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-          次の一週間 ＞
+          style={{ padding: "9px 14px", minHeight: 40, border: "1px solid #ccc", borderRadius: 8, background: C.white, color: C.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          次の週 ＞
         </button>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 30, color: C.textLight }}>読み込み中...</div>
+        <div style={{ padding: "6px 6px 0" }}>
+          {/* スケルトン */}
+          <div style={{ display: "grid", gridTemplateColumns: "42px repeat(7, 1fr)", gap: 1, background: "#e0e0e0" }}>
+            {Array.from({ length: 8 * 8 }).map((_, i) => (
+              <div key={i} style={{ background: "#f8f8f8", height: i < 8 ? 36 : 36, animation: "fadeIn 0.3s ease-out" }} />
+            ))}
+          </div>
+          <div style={{ textAlign: "center", padding: "16px 0 0", color: C.textLight, fontSize: 12 }}>空き状況を読み込み中...</div>
+        </div>
       ) : (
-        <div style={{ padding: "6px 6px 0", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 360, tableLayout: "fixed", fontSize: 11 }}>
+        <div className="resv-calendar-wrap" style={{ padding: "6px 6px 0", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table className="resv-calendar-table" style={{ borderCollapse: "collapse", width: "100%", minWidth: 360, tableLayout: "fixed", fontSize: 11 }}>
             <colgroup>
               <col style={{ width: 42 }} />
               {wd.map((_, i) => <col key={i} />)}
@@ -946,50 +1007,61 @@ function ReservationSystem() {
                 {wd.map((d, i) => {
                   const dow = d.getDay();
                   const isSun = dow === 0, isSat = dow === 6;
+                  const isToday = i === todayColIdx;
+                  const baseBg = isSun ? C.pinkLight : isSat ? "#e3f2fd" : "#fafafa";
+                  const headerClass = isToday ? "resv-today-header" : "";
                   return (
-                    <th key={i} style={{ border: "1px solid #e0e0e0", background: isSun ? C.pinkLight : isSat ? "#e3f2fd" : "#fafafa", padding: "4px 0", textAlign: "center" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: isSun ? C.pink : isSat ? "#1a6bcc" : C.text }}>{d.getDate()}</div>
-                      <div style={{ fontSize: 9, color: isSun ? C.pink : isSat ? "#1a6bcc" : C.text, fontWeight: 600 }}>({dn[dow]})</div>
+                    <th key={i} className={headerClass} style={{ border: "1px solid #e0e0e0", background: baseBg, padding: "4px 0", textAlign: "center" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: isToday ? "#fff" : (isSun ? C.pink : isSat ? "#1a6bcc" : C.text) }}>{d.getDate()}</div>
+                      <div style={{ fontSize: 9, color: isToday ? "#fff" : (isSun ? C.pink : isSat ? "#1a6bcc" : C.text), fontWeight: 600 }}>({dn[dow]})</div>
                     </th>
                   );
                 })}
               </tr>
             </thead>
             <tbody>
-              {ts.map((t, idx) => (
-                <tr key={idx}>
-                  <td style={{ border: "1px solid #e0e0e0", background: "#fafafa", padding: "5px 2px", fontWeight: 700, fontSize: 11, color: C.text, textAlign: "center" }}>
-                    {t.h}:{t.m.toString().padStart(2, "0")}
-                  </td>
-                  {wd.map((d, i) => {
-                    const sd = new Date(d); sd.setHours(t.h, t.m, 0, 0);
-                    const isPast = sd < now;
-                    const sMs = sd.getTime(), eMs = sMs + 1800000;
-                    const isBusy = busy.some(b => sMs < new Date(b.end).getTime() && eMs > new Date(b.start).getTime());
-                    const dow = d.getDay();
-                    const baseBg = dow === 0 ? "#fff8fa" : dow === 6 ? "#f8fbff" : C.white;
-                    if (isPast || isBusy) {
-                      return <td key={i} style={{ border: "1px solid #e0e0e0", background: isPast ? "#f5f5f5" : baseBg, textAlign: "center", padding: "4px 0", color: "#ccc", fontSize: 12 }}>×</td>;
-                    }
-                    return (
-                      <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, padding: 0, textAlign: "center" }}>
-                        <button onClick={() => { setSlot(sd.toISOString()); setStep("form"); }}
-                          style={{ background: "transparent", border: "none", width: "100%", padding: "4px 0", cursor: "pointer", fontSize: 18, fontWeight: 900, color: "#e0004e", textShadow: "0 0 1px #e0004e" }}>
-                          ○
-                        </button>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {ts.map((t, idx) => {
+                const isNowRow = idx === nowSlotIdx;
+                return (
+                  <tr key={idx} ref={isNowRow ? el => { if (el && !el.dataset.scrolled) { el.dataset.scrolled = '1'; el.scrollIntoView({ block: 'center', behavior: 'instant' }); } } : null}>
+                    <td style={{ border: "1px solid #e0e0e0", background: isNowRow ? "#fef3c7" : "#fafafa", padding: "5px 2px", fontWeight: 700, fontSize: 11, color: isNowRow ? "#92400e" : C.text, textAlign: "center" }}>
+                      {t.h}:{t.m.toString().padStart(2, "0")}
+                    </td>
+                    {wd.map((d, i) => {
+                      const sd = new Date(d); sd.setHours(t.h, t.m, 0, 0);
+                      const isPast = sd < now;
+                      const sMs = sd.getTime(), eMs = sMs + 1800000;
+                      const isBusy = busy.some(b => sMs < new Date(b.end).getTime() && eMs > new Date(b.start).getTime());
+                      const dow = d.getDay();
+                      const baseBg = i === todayColIdx ? "#ecfdf5" : (dow === 0 ? "#fff8fa" : dow === 6 ? "#f8fbff" : C.white);
+                      if (isPast) {
+                        return <td key={i} className="resv-past-cell" style={{ border: "1px solid #e0e0e0", textAlign: "center", padding: "4px 0", fontSize: 12 }} title="過去のため予約不可">×</td>;
+                      }
+                      if (isBusy) {
+                        return <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, textAlign: "center", padding: "4px 0", color: "#ef4444", fontSize: 12, fontWeight: 700 }} title="他のご予約があります">×</td>;
+                      }
+                      return (
+                        <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, padding: 0, textAlign: "center" }}>
+                          <button className="resv-slot-btn" onClick={() => { setSlot(sd.toISOString()); setStep("form"); }} aria-label={`${d.getMonth()+1}月${d.getDate()}日 ${t.h}:${t.m.toString().padStart(2, "0")} の予約に進む`}>
+                            ○
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
       <div style={{ padding: "8px 12px 0" }}>
-        <div style={{ fontSize: 10, color: C.textLight, marginBottom: 8, textAlign: "center" }}>
-          <span style={{ color: C.pink, fontWeight: 700 }}>○</span> 予約可（タップで入力へ）　<span style={{ color: "#ccc" }}>×</span> 予約不可　※横スクロール可
+        <div style={{ fontSize: 10, color: C.textLight, marginBottom: 8, textAlign: "center", display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
+          <span><span style={{ color: C.pink, fontWeight: 700, fontSize: 14 }}>○</span> 予約可（タップ）</span>
+          <span><span style={{ color: "#ef4444", fontWeight: 700, fontSize: 14 }}>×</span> 予約済</span>
+          <span><span style={{ color: "#cbd5e1", fontWeight: 700, fontSize: 14 }}>×</span> 過去</span>
+          <span style={{ color: "#94a3b8" }}>※左右にスクロール可</span>
         </div>
         <PriceLink />
         <Link to="/" style={{ color: C.green, fontWeight: 700, fontSize: 12, textDecoration: "none", display: "block", textAlign: "center", padding: 8, marginTop: 4 }}>← メニューへ戻る</Link>
