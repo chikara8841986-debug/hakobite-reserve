@@ -20,7 +20,11 @@ def call_hakobite_reservation_api(payload: dict, timeout: int = 12):
     req = urllib.request.Request(
         HAKOBITE_RESERVATION_API_URL,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Hakobite-Reservation-API/1.0",
+        },
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=timeout) as res:
