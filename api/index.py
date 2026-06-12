@@ -6,6 +6,41 @@ from googleapiclient.discovery import build
 
 app = Flask(__name__)
 JST = datetime.timezone(datetime.timedelta(hours=9))
+HAKOBITE_RESERVATION_API_URL = os.environ.get(
+    "HAKOBITE_RESERVATION_API_URL",
+    "https://hakobite-work.pages.dev/api/reservation",
+)
+LEGACY_GAS_URL = os.environ.get(
+    "GAS_URL",
+    "https://script.google.com/macros/s/AKfycbw6Ep8OOakgStBhAMd2P_3tbbf5EJN8e18GGbyoOWIc4dJlq4Wti1dazOjg5ygm61nG/exec",
+)
+
+def call_hakobite_reservation_api(payload: dict, timeout: int = 12):
+    """予約アプリ専用APIを通して、許可された予約データだけを読み書きする。"""
+    req = urllib.request.Request(
+        HAKOBITE_RESERVATION_API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as res:
+        body = res.read().decode("utf-8")
+    result = json.loads(body) if body else {}
+    if not isinstance(result, dict) or result.get("ok") is False:
+        raise RuntimeError((result or {}).get("error", "Hakobite reservation API request failed"))
+    return result.get("result") or {}
+
+def fallback_reservation_to_gas(reservation_item: dict):
+    payload = json.dumps({"addReservation": reservation_item}).encode("utf-8")
+    req = urllib.request.Request(
+        LEGACY_GAS_URL,
+        data=payload,
+        headers={"Content-Type": "text/plain"},
+        method="POST",
+    )
+    opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler())
+    with opener.open(req, timeout=8) as gas_res:
+        return gas_res.read().decode("utf-8")
 
 # ============================================================
 # IP制限：同一IPから1時間以内に3件以上の予約を拒否
@@ -143,7 +178,7 @@ def _cors_headers():
     }
 
 
-@app.route('/api/repeaters', methods=['GET', 'OPTIONS'])
+@app.route('/api/repeaters', methods=['POST', 'OPTIONS'])
 def get_repeaters():
     if request.method == 'OPTIONS':
         resp = jsonify({})
@@ -152,29 +187,22 @@ def get_repeaters():
         return resp
 
     try:
-        gas_url = os.environ.get(
-            "GAS_URL",
-            "https://script.google.com/macros/s/AKfycbw6Ep8OOakgStBhAMd2P_3tbbf5EJN8e18GGbyoOWIc4dJlq4Wti1dazOjg5ygm61nG/exec"
-        )
-        opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler())
-        req = urllib.request.Request(gas_url, method="GET", headers={"cache-control": "no-cache"})
-        with opener.open(req, timeout=15) as gas_res:
-            body = gas_res.read().decode("utf-8")
-            data = json.loads(body) if body else {}
+        body = request.get_json(silent=True) or {}
+        data = call_hakobite_reservation_api({
+            "action": "repeaters",
+            "pin": str(body.get("pin", "")),
+        })
         repeaters = data.get("repeaters", []) if isinstance(data, dict) else []
-        active = [r for r in repeaters if isinstance(r, dict) and not r.get("isArchived")]
-        # 表示用に名前順でソート
-        active.sort(key=lambda r: (r.get("customerName") or ""))
-        resp = jsonify({"repeaters": active})
+        resp = jsonify({"repeaters": repeaters})
         for k, v in _cors_headers().items():
             resp.headers[k] = v
         return resp
     except Exception as e:
         print(f"Repeaters API Error: {e}")
-        resp = jsonify({"error": str(e), "repeaters": []})
+        resp = jsonify({"error": "暗証番号が違うか、リピーター情報を取得できませんでした。", "repeaters": []})
         for k, v in _cors_headers().items():
             resp.headers[k] = v
-        return resp, 500
+        return resp, 403
 
 @app.route('/api/reserve', methods=['POST', 'OPTIONS'])
 def reserve():
@@ -275,24 +303,22 @@ def reserve():
             except Exception as e:
                 print(f"Email Error: {e}")
 
-        # 業務管理アプリから呼ばれた場合はGAS同期をスキップ（業務管理アプリが別途syncToGASで全データを同期するため）
+        # 業務管理アプリから呼ばれた場合は重複保存を避ける。
+        # 変数名は既存フロントとの互換性のため維持する。
         skip_gas = data.get("skipGasSync", False)
         if not skip_gas:
-            # 業務管理アプリ（GAS）へ予約データを同期
-            gas_url = os.environ.get(
-                "GAS_URL",
-                "https://script.google.com/macros/s/AKfycbw6Ep8OOakgStBhAMd2P_3tbbf5EJN8e18GGbyoOWIc4dJlq4Wti1dazOjg5ygm61nG/exec"
-            )
             try:
                 import time, random, string
                 new_id = f"{int(time.time() * 1000)}_{(''.join(random.choices(string.ascii_lowercase + string.digits, k=5)))}"
                 reservation_item = {
                     "id": new_id,
-                    "createdAt": start_dt.isoformat(),
+                    "createdAt": datetime.datetime.now(JST).isoformat(),
                     "customerName": name,
                     "customerPhone": data.get("tel", data.get("phone", "")),
                     "customerEmail": to_email,
                     "reservationDate": start_dt.isoformat(),
+                    "startTime": start_dt.strftime("%H:%M"),
+                    "endTime": end_dt.strftime("%H:%M"),
                     "serviceType": data.get("serviceType", "介護タクシー"),
                     "pickupLocation": data.get("from", data.get("pickupLocation", "")) + (f"（{data.get('wardRoom')}）" if data.get("wardRoom") else ""),
                     "dropoffLocation": data.get("to", data.get("dropoffLocation", "")),
@@ -307,25 +333,21 @@ def reserve():
                     "paymentMethod": data.get("payment", data.get("paymentMethod", "現金")),
                     "careReq": data.get("careReq", ""),
                     "memo": data.get("note", data.get("notes", data.get("memo", ""))),
+                    "calendarEventId": calendar_event_id or "",
+                    "travelEventId": travel_event_id or "",
                     "source": "reserve_app"
                 }
-                # GASにPOSTしてreservationsに追記させる
-                # text/plainで送るとGASがリダイレクト後もPOSTを維持できる
-                gas_payload = json.dumps({"addReservation": reservation_item}).encode("utf-8")
-                gas_req = urllib.request.Request(
-                    gas_url,
-                    data=gas_payload,
-                    headers={"Content-Type": "text/plain"},
-                    method="POST"
-                )
-                # GASはリダイレクトするのでfollow_redirectsが必要
-                # GAS側で予約シートのみ更新するよう最適化したのでタイムアウトを短縮
-                opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler())
-                with opener.open(gas_req, timeout=8) as gas_res:
-                    gas_body = gas_res.read().decode("utf-8")
-                    print(f"GAS sync: {gas_res.status} / {gas_body[:200]}")
+                call_hakobite_reservation_api({
+                    "action": "create",
+                    "reservation": reservation_item,
+                })
             except Exception as e:
-                print(f"GAS Sync Error (non-fatal): {e}")
+                print(f"Reservation Supabase API Error; trying GAS fallback: {e}")
+                try:
+                    if "reservation_item" in locals():
+                        fallback_reservation_to_gas(reservation_item)
+                except Exception as fallback_error:
+                    print(f"GAS fallback error (non-fatal): {fallback_error}")
 
         resp = jsonify({"status": "success", "calendarEventId": calendar_event_id, "travelEventId": travel_event_id})
         for k, v in _cors_headers().items():

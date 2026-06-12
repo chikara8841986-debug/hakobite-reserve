@@ -348,33 +348,37 @@ function ReservationSystem() {
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
-  const [pinAuthed, setPinAuthed] = useState(() => {
-    try { return sessionStorage.getItem("hakobite_admin_pin") === "1"; } catch { return false; }
-  });
+  const [pinAuthed, setPinAuthed] = useState(false);
   const [repeaters, setRepeaters] = useState([]);
   const [repeatersLoading, setRepeatersLoading] = useState(false);
   const [selectedRepeaterId, setSelectedRepeaterId] = useState("");
 
-  const ADMIN_PIN = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_ADMIN_PIN) || "8841";
-
-  const fetchRepeaters = async () => {
-    if (repeaters.length > 0 || repeatersLoading) return;
+  const fetchRepeaters = async (pin) => {
+    if (repeatersLoading) return false;
     setRepeatersLoading(true);
     try {
-      const res = await fetch("/api/repeaters", { cache: "no-store" });
+      const res = await fetch("/api/repeaters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ pin }),
+      });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "リピーター情報を取得できませんでした");
       setRepeaters(Array.isArray(data.repeaters) ? data.repeaters : []);
+      return true;
     } catch (e) {
       console.warn("リピーター取得失敗:", e);
+      setPinError(e.message || "暗証番号を確認してください");
+      return false;
     } finally {
       setRepeatersLoading(false);
     }
   };
 
   const openManualInput = () => {
-    if (pinAuthed) {
+    if (pinAuthed && repeaters.length > 0) {
       setShowManualInput(true);
-      fetchRepeaters();
     } else {
       setPinInput("");
       setPinError("");
@@ -382,15 +386,12 @@ function ReservationSystem() {
     }
   };
 
-  const submitPin = () => {
-    if (pinInput === ADMIN_PIN) {
+  const submitPin = async () => {
+    setPinError("");
+    if (await fetchRepeaters(pinInput)) {
       setPinAuthed(true);
-      try { sessionStorage.setItem("hakobite_admin_pin", "1"); } catch {}
       setShowPinPrompt(false);
       setShowManualInput(true);
-      fetchRepeaters();
-    } else {
-      setPinError("PINコードが正しくありません");
     }
   };
 
