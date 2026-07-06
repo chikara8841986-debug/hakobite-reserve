@@ -1246,21 +1246,44 @@ function ReservationSystem() {
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 8 }}>
                     {availabilityResult.reason === "past" ? "⚠ 過去の日時は選択できません" : "⚠ 申し訳ありません、この時間帯はご案内できません"}
                   </div>
-                  {(availabilityResult.alternatives || []).length > 0 ? (
-                    <>
-                      <div style={{ fontSize: 12, color: C.textMid, marginBottom: 8 }}>同じ日の他の時間はいかがですか？</div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {availabilityResult.alternatives.map(t => (
-                          <button key={t} type="button" onClick={() => { const [h, m] = t.split(":"); checkAvailability(h, m); }}
-                            style={{ padding: "10px 14px", borderRadius: 8, border: `1.5px solid ${C.green}`, background: C.greenBg, color: C.green, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                            {t}〜
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ fontSize: 12, color: C.textMid }}>恐れ入りますが、お電話にてご相談ください。</div>
-                  )}
+                  {(() => {
+                    const altBefore = (availabilityResult.alternatives && availabilityResult.alternatives.before) || [];
+                    const altAfter = (availabilityResult.alternatives && availabilityResult.alternatives.after) || [];
+                    if (altBefore.length === 0 && altAfter.length === 0) {
+                      return <div style={{ fontSize: 12, color: C.textMid }}>恐れ入りますが、お電話にてご相談ください。</div>;
+                    }
+                    return (
+                      <>
+                        <div style={{ fontSize: 12, color: C.textMid, marginBottom: 8 }}>同じ日の他の時間はいかがですか？</div>
+                        {altBefore.length > 0 && (
+                          <div style={{ marginBottom: altAfter.length > 0 ? 10 : 0 }}>
+                            <div style={{ fontSize: 11, color: C.textLight, fontWeight: 700, marginBottom: 4 }}>▲ 前の時間</div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              {altBefore.map(t => (
+                                <button key={t} type="button" onClick={() => { const [h, m] = t.split(":"); checkAvailability(h, m); }}
+                                  style={{ padding: "10px 14px", borderRadius: 8, border: `1.5px solid ${C.green}`, background: C.greenBg, color: C.green, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                                  {t}〜
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {altAfter.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: 11, color: C.textLight, fontWeight: 700, marginBottom: 4 }}>▼ 後の時間</div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              {altAfter.map(t => (
+                                <button key={t} type="button" onClick={() => { const [h, m] = t.split(":"); checkAvailability(h, m); }}
+                                  style={{ padding: "10px 14px", borderRadius: 8, border: `1.5px solid ${C.green}`, background: C.greenBg, color: C.green, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                                  {t}〜
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </>
               )}
             </div>

@@ -114,9 +114,10 @@ def _get_busy_intervals_for_date(service, calendar_id, date_str):
 def _is_window_busy(busy_intervals, window_start, window_end):
     return any(window_start < b_end and window_end > b_start for b_start, b_end in busy_intervals)
 
-def _find_alternative_starts(busy_intervals, base_date, duration_minutes, now, requested_start, limit=3):
-    """同日内で、移動バッファを含めて空いている開始時刻を、希望時刻に近い順に最大limit件返す。"""
-    candidates = []
+def _find_alternative_starts(busy_intervals, base_date, duration_minutes, now, requested_start, before_limit=2, after_limit=2):
+    """同日内で、移動バッファを含めて空いている開始時刻を、希望時刻より前と後それぞれ近い順に最大limit件ずつ返す。"""
+    before_candidates = []
+    after_candidates = []
     for hour in range(BUSINESS_HOUR_START, BUSINESS_HOUR_END + 1):
         for minute in range(0, 60, 15):
             if hour == BUSINESS_HOUR_END and minute > 0:
@@ -128,9 +129,18 @@ def _find_alternative_starts(busy_intervals, base_date, duration_minutes, now, r
             window_start = cand_start - datetime.timedelta(minutes=TRAVEL_BUFFER_BEFORE_MIN)
             if _is_window_busy(busy_intervals, window_start, cand_end):
                 continue
-            candidates.append(cand_start)
-    candidates.sort(key=lambda c: abs((c - requested_start).total_seconds()))
-    return [c.strftime('%H:%M') for c in candidates[:limit]]
+            if cand_start < requested_start:
+                before_candidates.append(cand_start)
+            elif cand_start > requested_start:
+                after_candidates.append(cand_start)
+    before_candidates.sort(key=lambda c: abs((c - requested_start).total_seconds()))
+    after_candidates.sort(key=lambda c: abs((c - requested_start).total_seconds()))
+    before_selected = sorted(before_candidates[:before_limit])
+    after_selected = sorted(after_candidates[:after_limit])
+    return {
+        "before": [c.strftime('%H:%M') for c in before_selected],
+        "after": [c.strftime('%H:%M') for c in after_selected],
+    }
 
 @app.route('/api/distance', methods=['GET'])
 def get_distance():
