@@ -6,6 +6,12 @@ from googleapiclient.discovery import build
 
 app = Flask(__name__)
 JST = datetime.timezone(datetime.timedelta(hours=9))
+
+# 空き判定の設定（チューニング前提の定数）
+TRAVEL_BUFFER_BEFORE_MIN = 30   # 予約開始前に確保する移動準備イベントぶんのバッファ
+BUSINESS_HOUR_START = 8         # 代替候補探索・開始時刻の下限
+BUSINESS_HOUR_END = 18          # 代替候補探索・開始時刻の上限
+
 HAKOBITE_RESERVATION_API_URL = os.environ.get(
     "HAKOBITE_RESERVATION_API_URL",
     "https://hakobite-work.pages.dev/api/reservation",
@@ -86,6 +92,45 @@ def get_service():
     except Exception as e:
         print(f"Credentials Error: {e}")
         raise
+
+def _get_busy_intervals_for_date(service, calendar_id, date_str):
+    """指定日（JST）の終日でないイベントを (開始, 終了) のJST datetimeタプルのリストで返す。"""
+    t_min = f"{date_str}T00:00:00+09:00"
+    t_max = f"{date_str}T23:59:59+09:00"
+    events_result = service.events().list(
+        calendarId=calendar_id,
+        timeMin=t_min, timeMax=t_max, singleEvents=True, orderBy='startTime'
+    ).execute()
+    busy = []
+    for event in events_result.get('items', []):
+        start_time = event['start'].get('dateTime')
+        end_time = event['end'].get('dateTime')
+        if start_time and end_time:
+            dt_s = datetime.datetime.fromisoformat(start_time.replace('Z', '+00:00')).astimezone(JST)
+            dt_e = datetime.datetime.fromisoformat(end_time.replace('Z', '+00:00')).astimezone(JST)
+            busy.append((dt_s, dt_e))
+    return busy
+
+def _is_window_busy(busy_intervals, window_start, window_end):
+    return any(window_start < b_end and window_end > b_start for b_start, b_end in busy_intervals)
+
+def _find_alternative_starts(busy_intervals, base_date, duration_minutes, now, requested_start, limit=3):
+    """同日内で、移動バッファを含めて空いている開始時刻を、希望時刻に近い順に最大limit件返す。"""
+    candidates = []
+    for hour in range(BUSINESS_HOUR_START, BUSINESS_HOUR_END + 1):
+        for minute in range(0, 60, 15):
+            if hour == BUSINESS_HOUR_END and minute > 0:
+                continue
+            cand_start = datetime.datetime(base_date.year, base_date.month, base_date.day, hour, minute, tzinfo=JST)
+            if cand_start <= now:
+                continue
+            cand_end = cand_start + datetime.timedelta(minutes=duration_minutes)
+            window_start = cand_start - datetime.timedelta(minutes=TRAVEL_BUFFER_BEFORE_MIN)
+            if _is_window_busy(busy_intervals, window_start, cand_end):
+                continue
+            candidates.append(cand_start)
+    candidates.sort(key=lambda c: abs((c - requested_start).total_seconds()))
+    return [c.strftime('%H:%M') for c in candidates[:limit]]
 
 @app.route('/api/distance', methods=['GET'])
 def get_distance():
@@ -174,6 +219,58 @@ def get_slots():
         print(f"API Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/availability', methods=['GET'])
+def get_availability():
+    def _with_cors(resp):
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp
+
+    date_str = request.args.get('date', '')
+    start_str = request.args.get('start', '')
+    duration_str = request.args.get('duration', '')
+
+    try:
+        year, month, day = (int(x) for x in date_str.split('-'))
+        datetime.datetime(year, month, day)
+    except Exception:
+        return _with_cors(jsonify({"available": False, "error": "date は YYYY-MM-DD 形式で指定してください"})), 400
+
+    try:
+        start_h, start_m = (int(x) for x in start_str.split(':'))
+        assert 0 <= start_h < 24 and 0 <= start_m < 60
+    except Exception:
+        return _with_cors(jsonify({"available": False, "error": "start は HH:MM 形式で指定してください"})), 400
+
+    try:
+        duration_minutes = int(duration_str)
+        assert 30 <= duration_minutes <= 300
+    except Exception:
+        return _with_cors(jsonify({"available": False, "error": "duration は30〜300の範囲で指定してください"})), 400
+
+    try:
+        req_start = datetime.datetime(year, month, day, start_h, start_m, tzinfo=JST)
+        req_end = req_start + datetime.timedelta(minutes=duration_minutes)
+        window_start = req_start - datetime.timedelta(minutes=TRAVEL_BUFFER_BEFORE_MIN)
+        now = datetime.datetime.now(JST)
+
+        service = get_service()
+        calendar_id = os.environ.get("CALENDAR_ID", "chikara8841986@gmail.com")
+        busy = _get_busy_intervals_for_date(service, calendar_id, date_str)
+
+        if req_start <= now:
+            alternatives = _find_alternative_starts(busy, req_start.date(), duration_minutes, now, req_start)
+            return _with_cors(jsonify({"available": False, "reason": "past", "alternatives": alternatives}))
+
+        if _is_window_busy(busy, window_start, req_end):
+            alternatives = _find_alternative_starts(busy, req_start.date(), duration_minutes, now, req_start)
+            return _with_cors(jsonify({"available": False, "reason": "busy", "alternatives": alternatives}))
+
+        return _with_cors(jsonify({"available": True}))
+    except Exception as e:
+        print(f"Availability API Error: {e}")
+        return _with_cors(jsonify({"error": str(e)})), 500
+
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
@@ -237,6 +334,16 @@ def reserve():
         service = get_service()
         start_dt = datetime.datetime.fromisoformat(start_str.replace('Z', '+00:00')).astimezone(JST)
         end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
+        calendar_id = os.environ.get("CALENDAR_ID", "chikara8841986@gmail.com")
+
+        # サーバー側の直前重複チェック（検索・入力の間に他の予約が入るダブルブッキングを防ぐ）
+        window_start = start_dt - datetime.timedelta(minutes=TRAVEL_BUFFER_BEFORE_MIN)
+        busy_at_submit = _get_busy_intervals_for_date(service, calendar_id, start_dt.strftime('%Y-%m-%d'))
+        if _is_window_busy(busy_at_submit, window_start, end_dt):
+            resp = jsonify({"error": "conflict", "message": "申し訳ありません、直前に別のご予約が入りました。別の時間で再度お試しください。"})
+            for k, v in _cors_headers().items():
+                resp.headers[k] = v
+            return resp, 409
 
         # カレンダーへ予約本体を追加
         event = {
@@ -245,7 +352,6 @@ def reserve():
             'start': {'dateTime': start_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
             'end': {'dateTime': end_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
         }
-        calendar_id = os.environ.get("CALENDAR_ID", "chikara8841986@gmail.com")
         created_event = service.events().insert(calendarId=calendar_id, body=event).execute()
         calendar_event_id = created_event.get('id')
 
