@@ -1173,10 +1173,10 @@ function ReservationSystem() {
               <button type="button" onClick={() => setSearchCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
                 style={{ width: 32, height: 32, borderRadius: "50%", border: `1px solid ${C.border}`, background: C.white, cursor: "pointer", fontSize: 12 }}>▶</button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, textAlign: "center", fontSize: 11, marginBottom: 4 }}>
-              {dn.map((d, i) => <div key={d} style={{ color: i === 0 ? C.pink : i === 6 ? C.blue : C.textLight, fontWeight: 700 }}>{d}</div>)}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 4, textAlign: "center", fontSize: 11, marginBottom: 4 }}>
+              {dn.map((d, i) => <div key={d} style={{ minWidth: 0, color: i === 0 ? C.pink : i === 6 ? C.blue : C.textLight, fontWeight: 700 }}>{d}</div>)}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 4 }}>
               {Array.from({ length: leadingBlanks }).map((_, i) => <div key={`pad-${i}`} />)}
               {Array.from({ length: totalDaysInMonth }, (_, i) => i + 1).map(dayNum => {
                 const dObj = new Date(searchCalendarMonth.getFullYear(), searchCalendarMonth.getMonth(), dayNum);
@@ -1189,7 +1189,7 @@ function ReservationSystem() {
                   <button key={dayKey} type="button" disabled={isPast}
                     onClick={() => { setSearchDate(dayKey); setAvailabilityResult(null); }}
                     style={{
-                      aspectRatio: "1", borderRadius: 8, fontSize: 13, fontWeight: isSelected || isToday ? 800 : 600,
+                      aspectRatio: "1", width: "100%", minWidth: 0, padding: 0, borderRadius: 8, fontSize: 13, fontWeight: isSelected || isToday ? 800 : 600,
                       cursor: isPast ? "default" : "pointer",
                       border: `1.5px solid ${isSelected ? C.green : isToday ? C.green + "80" : C.borderLight}`,
                       background: isSelected ? C.green : isPast ? C.borderLight : C.white,
