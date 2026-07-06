@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "C:\\Users\\chika\\Desktop\\ハコビテ\\業務管理アプリ\\hakobite-app\\dist", "--listen", "3333", "--no-clipboard"],
       "port": 3333
+    },
+    {
+      "name": "hakobite-reserve-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5173"],
+      "port": 5173
     }
   ]
 }

@@ -35,6 +35,32 @@ const minutesToTime = (mins) => {
   const m = total % 60;
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 };
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const formatDuration = (mins) => {
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h === 0) return `${m}分`;
+  if (m === 0) return `${h}時間`;
+  return `${h}時間${m}分`;
+};
+function computeDefaultSearchStart() {
+  const now = new Date();
+  const hour = now.getHours();
+  const d = new Date(now); d.setHours(0, 0, 0, 0);
+  if (hour >= 18 || hour < 8) {
+    if (hour >= 18) d.setDate(d.getDate() + 1);
+    return { date: d, hour: 9 };
+  }
+  return { date: d, hour: Math.min(Math.max(hour + 1, 8), 18) };
+}
+function getInitialReserveStep() {
+  try {
+    return new URLSearchParams(window.location.search).get("mode") === "calendar" ? "slots" : "search";
+  } catch {
+    return "search";
+  }
+}
+const SEARCH_HOUR_OPTIONS = Array.from({ length: 11 }, (_, i) => String(i + 8).padStart(2, "0"));
+const SEARCH_MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
 
 // ============================================================
 // カラー
@@ -293,7 +319,7 @@ function PriceCalculator() {
 // 3. 予約システム
 // ============================================================
 function ReservationSystem() {
-  const [step, setStep] = useState("slots");
+  const [step, setStep] = useState(getInitialReserveStep);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState("");
@@ -321,8 +347,10 @@ function ReservationSystem() {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
-      const { bk: savedBk, slot: savedSlot } = JSON.parse(raw);
+      const { bk: savedBk, slot: savedSlot, durationMinutes: savedDuration, durationFromSearch: savedDurationFromSearch } = JSON.parse(raw);
       if (savedBk) setBk(savedBk);
+      setDurationMinutes(typeof savedDuration === "number" ? savedDuration : 60);
+      setDurationFromSearch(Boolean(savedDurationFromSearch));
       if (savedSlot) {
         setSlot(savedSlot);
         setStep("form");
@@ -443,7 +471,6 @@ function ReservationSystem() {
     setTimeout(tryRender, 100);
   }, [step]);
   const [bk, setBk] = useState({
-    duration: "30分",
     name: "", tel: "", email: "",
     serviceType: "介護タクシー",
     from: "", wardRoom: "", to: "",
@@ -459,6 +486,21 @@ function ReservationSystem() {
     payments: ["現金"],
     note: ""
   });
+
+  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [durationFromSearch, setDurationFromSearch] = useState(false);
+  const [fallbackNotice, setFallbackNotice] = useState("");
+  const [searchDate, setSearchDate] = useState(() => ymd(computeDefaultSearchStart().date));
+  const [searchCalendarMonth, setSearchCalendarMonth] = useState(() => {
+    const d = computeDefaultSearchStart().date;
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [searchStartHour, setSearchStartHour] = useState(() => String(computeDefaultSearchStart().hour).padStart(2, "0"));
+  const [searchStartMinute, setSearchStartMinute] = useState("00");
+  const [searchDurationHour, setSearchDurationHour] = useState("1");
+  const [searchDurationMinute, setSearchDurationMinute] = useState("0");
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [availabilityResult, setAvailabilityResult] = useState(null);
 
   const durMap = { "30分": 30, "1時間": 60, "1時間30分": 90, "2時間": 120, "2時間30分": 150, "3時間": 180, "4時間": 240, "5時間": 300 };
   const dn = ["日", "月", "火", "水", "木", "金", "土"];
@@ -480,14 +522,47 @@ function ReservationSystem() {
 
   useEffect(() => { refreshBusy(); }, []);
 
+  const checkAvailability = async (overrideHour, overrideMinute) => {
+    const hh = overrideHour ?? searchStartHour;
+    const mm = overrideMinute ?? searchStartMinute;
+    if (overrideHour) { setSearchStartHour(overrideHour); setSearchStartMinute(overrideMinute); }
+    const durMins = parseInt(searchDurationHour, 10) * 60 + parseInt(searchDurationMinute, 10);
+    if (durMins <= 0) { alert("ご利用時間を選択してください"); return; }
+    setCheckingAvailability(true);
+    setAvailabilityResult(null);
+    try {
+      const params = new URLSearchParams({ date: searchDate, start: `${hh}:${mm}`, duration: String(durMins) });
+      const res = await fetch(`/api/availability?${params.toString()}`, { cache: "no-store" });
+      if (res.status >= 500) throw new Error("availability service error");
+      const data = await res.json();
+      setAvailabilityResult({ ...data, checkedDurationMinutes: durMins });
+    } catch (e) {
+      console.warn("空き確認に失敗、カレンダー表示に切り替えます:", e);
+      setFallbackNotice("⚠ ただいま空き確認が混み合っています。恐れ入りますが、下のカレンダーから空いている時間をお選びください。");
+      refreshBusy();
+      setStep("slots");
+    } finally {
+      setCheckingAvailability(false);
+    }
+  };
+
+  const proceedToForm = () => {
+    if (!availabilityResult || !availabilityResult.available) return;
+    const d = new Date(`${searchDate}T${searchStartHour}:${searchStartMinute}:00`);
+    setSlot(d.toISOString());
+    setDurationMinutes(availabilityResult.checkedDurationMinutes);
+    setDurationFromSearch(true);
+    setStep("form");
+  };
+
   // 入力中はドラフト自動保存（顧客情報を1つ以上入れたら）
   useEffect(() => {
     const hasContent = (bk.name || bk.tel || bk.from || bk.to || bk.email || bk.note || bk.careNotes);
     if (!hasContent) return;
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ bk, slot, savedAt: new Date().toISOString() }));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ bk, slot, durationMinutes, durationFromSearch, savedAt: new Date().toISOString() }));
     } catch {}
-  }, [bk, slot]);
+  }, [bk, slot, durationMinutes, durationFromSearch]);
 
   const validate = () => {
     const e = {};
@@ -522,10 +597,10 @@ function ReservationSystem() {
       alert("「私はロボットではありません」にチェックを入れてください。");
       return;
     }
-    const sMs = new Date(slot).getTime(), eMs = sMs + durMap[bk.duration] * 60000;
+    const sMs = new Date(slot).getTime(), eMs = sMs + durationMinutes * 60000;
     if (busy.some(b => sMs < new Date(b.end).getTime() && eMs > new Date(b.start).getTime())) {
-      alert(`選択された時間帯（${bk.duration}）は既に予約があります。`);
-      setStep("slots");
+      alert(`選択された時間帯（${formatDuration(durationMinutes)}）は既に予約があります。`);
+      setStep(durationFromSearch ? "search" : "slots");
       return;
     }
     const sD = new Date(slot), eD = new Date(eMs);
@@ -546,7 +621,7 @@ function ReservationSystem() {
     const careNotesInfo = bk.careNotes ? `\n■ご利用に際しての留意事項: ${bk.careNotes}` : "";
 
     const det = [
-      `■日時: ${dStr} ～ ${eStr} (${bk.duration})`,
+      `■日時: ${dStr} ～ ${eStr} (${formatDuration(durationMinutes)})`,
       `■サービス: ${bk.serviceType}`,
       `■お名前（利用者）: ${bk.name}`,
       `■電話: ${bk.tel}`,
@@ -571,10 +646,10 @@ function ReservationSystem() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          summary: `【予約】${bk.name}様 (${bk.duration})`,
+          summary: `【予約】${bk.name}様 (${formatDuration(durationMinutes)})`,
           description: det,
           start: slot,
-          duration_minutes: durMap[bk.duration],
+          duration_minutes: durationMinutes,
           name: bk.name,
           email: bk.email,
           tel: bk.tel,
@@ -606,6 +681,10 @@ function ReservationSystem() {
         setStep("success");
       } else if (r.status === 429) {
         alert("短時間に予約が集中しています。しばらく時間をおいてから再度お試しください。");
+      } else if (r.status === 409) {
+        alert("申し訳ありません、直前に別のご予約が入りました。別の時間で再度お試しください。");
+        setAvailabilityResult(null);
+        setStep(durationFromSearch ? "search" : "slots");
       } else {
         alert("送信に失敗しました。");
       }
@@ -618,6 +697,107 @@ function ReservationSystem() {
       setSubmitProgress("");
     }
   };
+
+  const manualInputTrigger = (
+    <div style={{ textAlign: "right", padding: "0 14px 4px" }}>
+      <button onClick={openManualInput}
+        style={{ background: "none", border: "none", color: "#ccc", fontSize: 16, cursor: "pointer", padding: "2px 4px", opacity: 0.5 }}
+        title="日時を直接入力">≡</button>
+    </div>
+  );
+
+  const manualInputModals = (
+    <>
+      {showPinPrompt && (
+        <div onClick={() => setShowPinPrompt(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 360, padding: "22px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>管理者PIN</span>
+              <button onClick={() => setShowPinPrompt(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textLight }}>✕</button>
+            </div>
+            <p style={{ fontSize: 12, color: C.textMid, marginBottom: 10 }}>この機能は管理者専用です。PINを入力してください。</p>
+            <input type="password" inputMode="numeric" autoFocus
+              value={pinInput}
+              onChange={e => { setPinInput(e.target.value); setPinError(""); }}
+              onKeyDown={e => { if (e.key === "Enter") submitPin(); }}
+              placeholder="PINコード"
+              style={{ ...inp, fontSize: 18, letterSpacing: 4, textAlign: "center", borderColor: pinError ? C.red : C.border }} />
+            {pinError && <div style={{ fontSize: 12, color: C.red, marginTop: 6 }}>{pinError}</div>}
+            <button onClick={submitPin} style={{ ...bGreen, marginTop: 14 }}>認証する</button>
+          </div>
+        </div>
+      )}
+
+      {showManualInput && (
+        <div onClick={() => setShowManualInput(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, padding: "20px 16px 40px", maxHeight: "85vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>日時を直接指定</span>
+              <button onClick={() => setShowManualInput(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textLight }}>✕</button>
+            </div>
+
+            {/* リピーター選択 */}
+            <div style={{ marginBottom: 14, padding: 12, background: C.greenBg, borderRadius: 10, border: `1px solid ${C.border}` }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 6 }}>
+                ⭐ リピーターから選択（任意）{repeatersLoading && " 読込中..."}
+              </label>
+              <select value={selectedRepeaterId}
+                onChange={e => { setSelectedRepeaterId(e.target.value); applyRepeaterToBk(e.target.value); }}
+                style={{ ...inp, fontSize: 14 }}>
+                <option value="">— 選択しない —</option>
+                {repeaters.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.customerName || "（名前なし）"}{r.customerPhone ? ` / ${r.customerPhone}` : ""}
+                  </option>
+                ))}
+              </select>
+              {selectedRepeaterId && (
+                <div style={{ fontSize: 11, color: C.green, marginTop: 6, fontWeight: 700 }}>
+                  ✓ 次の画面で名前・電話・住所などが自動入力されます
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 4 }}>日付</label>
+              <input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)}
+                style={{ ...inp, fontSize: 15 }} />
+            </div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 4 }}>時</label>
+                <select value={manualHour} onChange={e => setManualHour(e.target.value)} style={{ ...inp, fontSize: 15 }}>
+                  {Array.from({ length: 11 }, (_, i) => i + 8).map(h => <option key={h} value={h}>{h}時</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 4 }}>分</label>
+                <select value={manualMinute} onChange={e => setManualMinute(e.target.value)} style={{ ...inp, fontSize: 15 }}>
+                  {Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{String(m).padStart(2, "0")}分</option>)}
+                </select>
+              </div>
+            </div>
+            <button onClick={() => {
+              if (!manualDate) { alert("日付を選択してください"); return; }
+              const d = new Date(manualDate);
+              d.setHours(parseInt(manualHour), parseInt(manualMinute), 0, 0);
+              if (d < new Date()) { alert("過去の日時は選択できません"); return; }
+              if (selectedRepeaterId) applyRepeaterToBk(selectedRepeaterId);
+              setSlot(d.toISOString());
+              setDurationFromSearch(false);
+              setDurationMinutes(30);
+              setShowManualInput(false);
+              setStep("form");
+            }} style={bGreen}>この日時で予約へ進む</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   // --- 完了 ---
   if (step === "success") return (
@@ -634,7 +814,7 @@ function ReservationSystem() {
         {!["ソーシャルワーカー", "ふじ介護タクシー"].includes(bk.bookerType) && (
           <p style={{ color: C.textMid, fontSize: 12, lineHeight: 1.7, marginBottom: 20 }}>確認のご連絡を差し上げます。</p>
         )}
-        <button onClick={() => { refreshBusy(); setStep("slots"); setWOff(0); }} style={bGreen}>カレンダーに戻る</button>
+        <button onClick={() => { setAvailabilityResult(null); setDurationFromSearch(false); setStep("search"); }} style={bGreen}>もう一度予約する</button>
       </div>
     </div>
   );
@@ -642,7 +822,7 @@ function ReservationSystem() {
   // --- 確認画面 ---
   if (step === "confirm") {
     const sD = slot ? new Date(slot) : null;
-    const eD = sD ? new Date(sD.getTime() + durMap[bk.duration] * 60000) : null;
+    const eD = sD ? new Date(sD.getTime() + durationMinutes * 60000) : null;
     const dateStr = sD ? sD.toLocaleString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
     const endStr = eD ? `${eD.getHours()}:${eD.getMinutes().toString().padStart(2, "0")}` : "";
     return (
@@ -678,7 +858,7 @@ function ReservationSystem() {
           <div style={{ background: C.greenBg, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
             <div style={{ fontSize: 11, color: C.textLight, marginBottom: 2 }}>📅 日時</div>
             <div style={{ fontSize: 15, fontWeight: 800, color: C.green }}>{dateStr}</div>
-            <div style={{ fontSize: 12, color: C.textMid, marginTop: 2 }}>〜 {endStr}（{bk.duration}）</div>
+            <div style={{ fontSize: 12, color: C.textMid, marginTop: 2 }}>〜 {endStr}（{formatDuration(durationMinutes)}）</div>
           </div>
 
           <div style={{ marginBottom: 12 }}>
@@ -764,7 +944,7 @@ function ReservationSystem() {
     const sD = slot ? new Date(slot) : null;
     return (
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "14px 14px 40px" }}>
-        <button onClick={() => setStep("slots")} style={{ background: "none", border: "none", color: C.green, fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 10, padding: 0 }}>← 空き状況に戻る</button>
+        <button onClick={() => setStep(durationFromSearch ? "search" : "slots")} style={{ background: "none", border: "none", color: C.green, fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 10, padding: 0 }}>{durationFromSearch ? "← 条件を変える" : "← 空き状況に戻る"}</button>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 14, flexWrap: "wrap" }}>
           <span style={{ background: C.greenBg, color: C.green, fontWeight: 700, padding: "3px 8px", borderRadius: 10, fontSize: 10 }}>① 日時選択 ✓</span>
           <span style={{ color: C.border, fontSize: 11 }}>→</span>
@@ -779,7 +959,21 @@ function ReservationSystem() {
           <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>📅 {sD ? sD.toLocaleString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" }) : ""}</div>
         </div>
         <form onSubmit={goConfirm}>
-          <div style={card}><ST icon="⏱" title="ご利用時間" /><FF label="ご利用予定時間" required><select value={bk.duration} onChange={e => ub("duration", e.target.value)} style={inp}>{Object.keys(durMap).map(d => <option key={d}>{d}</option>)}</select></FF></div>
+          <div style={card}>
+            <ST icon="⏱" title="ご利用時間" />
+            {durationFromSearch ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: C.greenBg, borderRadius: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.green }}>{formatDuration(durationMinutes)}</span>
+                <button type="button" onClick={() => setStep("search")} style={{ background: "none", border: "none", color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>← 条件を変えて再検索</button>
+              </div>
+            ) : (
+              <FF label="ご利用予定時間" required>
+                <select value={formatDuration(durationMinutes)} onChange={e => setDurationMinutes(durMap[e.target.value])} style={inp}>
+                  {Object.keys(durMap).map(d => <option key={d}>{d}</option>)}
+                </select>
+              </FF>
+            )}
+          </div>
           <div style={card}>
             <ST icon="👤" title="お客様情報" />
             <FF label="利用者のお名前" required error={errors.name}>
@@ -933,6 +1127,157 @@ function ReservationSystem() {
     );
   }
 
+  // --- 空き時間検索 ---
+  if (step === "search") {
+    const monthStart = new Date(searchCalendarMonth.getFullYear(), searchCalendarMonth.getMonth(), 1);
+    const leadingBlanks = monthStart.getDay();
+    const totalDaysInMonth = new Date(searchCalendarMonth.getFullYear(), searchCalendarMonth.getMonth() + 1, 0).getDate();
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayYmd = ymd(new Date());
+    const searchDurLabel = formatDuration(parseInt(searchDurationHour, 10) * 60 + parseInt(searchDurationMinute, 10));
+    const searchDateObj = new Date(`${searchDate}T00:00:00`);
+    const searchDateLabel = `${searchDateObj.getMonth() + 1}月${searchDateObj.getDate()}日（${dn[searchDateObj.getDay()]}）`;
+
+    return (
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 0 30px", overflow: "hidden" }}>
+        {draftAvailable && (
+          <div style={{ padding: "8px 12px 0" }}>
+            <div style={{ background: "#fef9c3", border: "1px solid #facc15", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#854d0e", marginBottom: 6 }}>📝 前回の入力途中のデータがあります</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={restoreDraft} style={{ flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, background: "#ca8a04", color: "white", border: "none", cursor: "pointer" }}>続きから再開する</button>
+                <button onClick={discardDraft} style={{ flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, background: "white", color: "#854d0e", border: "1px solid #facc15", cursor: "pointer" }}>新規で始める</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ padding: "8px 12px 0" }}>
+          <div style={{ background: C.orangeBg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", marginBottom: 6 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.orange, marginBottom: 4 }}>📱 電話不要！3分でかんたん予約</div>
+            <div style={{ fontSize: 15, color: C.textMid, lineHeight: 1.7 }}>
+              ① 日時とご利用時間を選ぶ<br />
+              ② 空き状況を確認<br />
+              ③ お名前・行き先などを入力 → 予約完了！
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: "0 12px" }}>
+          <div style={card}>
+            <ST icon="📅" title="ご希望日" />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <button type="button" onClick={() => setSearchCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+                style={{ width: 32, height: 32, borderRadius: "50%", border: `1px solid ${C.border}`, background: C.white, cursor: "pointer", fontSize: 12 }}>◀</button>
+              <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{searchCalendarMonth.getFullYear()}年{searchCalendarMonth.getMonth() + 1}月</div>
+              <button type="button" onClick={() => setSearchCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+                style={{ width: 32, height: 32, borderRadius: "50%", border: `1px solid ${C.border}`, background: C.white, cursor: "pointer", fontSize: 12 }}>▶</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, textAlign: "center", fontSize: 11, marginBottom: 4 }}>
+              {dn.map((d, i) => <div key={d} style={{ color: i === 0 ? C.pink : i === 6 ? C.blue : C.textLight, fontWeight: 700 }}>{d}</div>)}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+              {Array.from({ length: leadingBlanks }).map((_, i) => <div key={`pad-${i}`} />)}
+              {Array.from({ length: totalDaysInMonth }, (_, i) => i + 1).map(dayNum => {
+                const dObj = new Date(searchCalendarMonth.getFullYear(), searchCalendarMonth.getMonth(), dayNum);
+                const dayKey = ymd(dObj);
+                const isPast = dObj < todayStart;
+                const isToday = dayKey === todayYmd;
+                const isSelected = dayKey === searchDate;
+                const weekday = dObj.getDay();
+                return (
+                  <button key={dayKey} type="button" disabled={isPast}
+                    onClick={() => { setSearchDate(dayKey); setAvailabilityResult(null); }}
+                    style={{
+                      aspectRatio: "1", borderRadius: 8, fontSize: 13, fontWeight: isSelected || isToday ? 800 : 600,
+                      cursor: isPast ? "default" : "pointer",
+                      border: `1.5px solid ${isSelected ? C.green : isToday ? C.green + "80" : C.borderLight}`,
+                      background: isSelected ? C.green : isPast ? C.borderLight : C.white,
+                      color: isSelected ? "#fff" : isPast ? "#bbb" : weekday === 0 ? C.pink : weekday === 6 ? C.blue : C.text,
+                    }}>
+                    {dayNum}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={card}>
+            <ST icon="🕐" title="開始時刻" />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select value={searchStartHour} onChange={e => { setSearchStartHour(e.target.value); setAvailabilityResult(null); }} style={inp}>
+                {SEARCH_HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}時</option>)}
+              </select>
+              <select value={searchStartMinute} onChange={e => { setSearchStartMinute(e.target.value); setAvailabilityResult(null); }} style={inp}>
+                {SEARCH_MINUTE_OPTIONS.map(m => <option key={m} value={m}>{m}分</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={card}>
+            <ST icon="⏱" title="ご利用時間" />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select value={searchDurationHour} onChange={e => { setSearchDurationHour(e.target.value); setAvailabilityResult(null); }} style={inp}>
+                {["0", "1", "2", "3", "4", "5"].map(h => <option key={h} value={h}>{h}時間</option>)}
+              </select>
+              <select value={searchDurationMinute} onChange={e => { setSearchDurationMinute(e.target.value); setAvailabilityResult(null); }} style={inp}>
+                {["0", "30"].map(m => <option key={m} value={m}>{m}分</option>)}
+              </select>
+            </div>
+            <div style={{ fontSize: 11, color: C.textLight, marginTop: 6 }}>合計: {searchDurLabel}（最短30分〜）</div>
+          </div>
+
+          <button type="button" onClick={() => checkAvailability()} disabled={checkingAvailability} style={{ ...bOrange, opacity: checkingAvailability ? 0.7 : 1 }}>
+            {checkingAvailability ? "確認中..." : "🔍 空きを確認する"}
+          </button>
+
+          {availabilityResult && (
+            <div style={{ ...card, marginTop: 14 }}>
+              {availabilityResult.available ? (
+                <>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: C.green, marginBottom: 8 }}>✅ ご案内できます</div>
+                  <div style={{ fontSize: 12, color: C.textMid, marginBottom: 14 }}>
+                    {searchDateLabel} {searchStartHour}:{searchStartMinute}〜（{formatDuration(availabilityResult.checkedDurationMinutes)}）
+                  </div>
+                  <button type="button" onClick={proceedToForm} style={bGreen}>この日時で予約へ進む →</button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 8 }}>
+                    {availabilityResult.reason === "past" ? "⚠ 過去の日時は選択できません" : "⚠ 申し訳ありません、この時間帯はご案内できません"}
+                  </div>
+                  {(availabilityResult.alternatives || []).length > 0 ? (
+                    <>
+                      <div style={{ fontSize: 12, color: C.textMid, marginBottom: 8 }}>同じ日の他の時間はいかがですか？</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {availabilityResult.alternatives.map(t => (
+                          <button key={t} type="button" onClick={() => { const [h, m] = t.split(":"); checkAvailability(h, m); }}
+                            style={{ padding: "10px 14px", borderRadius: 8, border: `1.5px solid ${C.green}`, background: C.greenBg, color: C.green, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                            {t}〜
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: C.textMid }}>恐れ入りますが、お電話にてご相談ください。</div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          <PriceLink />
+          <Link to="/" style={{ color: C.green, fontWeight: 700, fontSize: 12, textDecoration: "none", display: "block", textAlign: "center", padding: 8, marginTop: 10 }}>← メニューへ戻る</Link>
+        </div>
+
+        {manualInputTrigger}
+        {manualInputModals}
+
+        <Footer />
+      </div>
+    );
+  }
+
   // --- カレンダー ---
   const now = new Date();
   const yearMonth = `${wd[0].getFullYear()}年${wd[0].getMonth() + 1}月`;
@@ -955,6 +1300,13 @@ function ReservationSystem() {
               <button onClick={restoreDraft} style={{ flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, background: "#ca8a04", color: "white", border: "none", cursor: "pointer" }}>続きから再開する</button>
               <button onClick={discardDraft} style={{ flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, background: "white", color: "#854d0e", border: "1px solid #facc15", cursor: "pointer" }}>新規で始める</button>
             </div>
+          </div>
+        </div>
+      )}
+      {fallbackNotice && (
+        <div style={{ padding: "8px 12px 0" }}>
+          <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 12px", marginBottom: 8, fontSize: 12, color: "#991b1b", fontWeight: 700 }}>
+            {fallbackNotice}
           </div>
         </div>
       )}
@@ -1048,7 +1400,7 @@ function ReservationSystem() {
                       }
                       return (
                         <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, padding: 0, textAlign: "center" }}>
-                          <button className="resv-slot-btn" onClick={() => { setSlot(sd.toISOString()); setStep("form"); }} aria-label={`${d.getMonth()+1}月${d.getDate()}日 ${t.h}:${t.m.toString().padStart(2, "0")} の予約に進む`}>
+                          <button className="resv-slot-btn" onClick={() => { setSlot(sd.toISOString()); setDurationFromSearch(false); setDurationMinutes(30); setStep("form"); }} aria-label={`${d.getMonth()+1}月${d.getDate()}日 ${t.h}:${t.m.toString().padStart(2, "0")} の予約に進む`}>
                             ○
                           </button>
                         </td>
@@ -1072,101 +1424,8 @@ function ReservationSystem() {
         <Link to="/" style={{ color: C.green, fontWeight: 700, fontSize: 12, textDecoration: "none", display: "block", textAlign: "center", padding: 8, marginTop: 4 }}>← メニューへ戻る</Link>
       </div>
 
-      {/* 日時直接入力アイコン（隅に小さく） */}
-      <div style={{ textAlign: "right", padding: "0 14px 4px" }}>
-        <button onClick={openManualInput}
-          style={{ background: "none", border: "none", color: "#ccc", fontSize: 16, cursor: "pointer", padding: "2px 4px", opacity: 0.5 }}
-          title="日時を直接入力">≡</button>
-      </div>
-
-      {/* PIN入力モーダル */}
-      {showPinPrompt && (
-        <div onClick={() => setShowPinPrompt(false)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={e => e.stopPropagation()}
-            style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 360, padding: "22px 18px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>管理者PIN</span>
-              <button onClick={() => setShowPinPrompt(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textLight }}>✕</button>
-            </div>
-            <p style={{ fontSize: 12, color: C.textMid, marginBottom: 10 }}>この機能は管理者専用です。PINを入力してください。</p>
-            <input type="password" inputMode="numeric" autoFocus
-              value={pinInput}
-              onChange={e => { setPinInput(e.target.value); setPinError(""); }}
-              onKeyDown={e => { if (e.key === "Enter") submitPin(); }}
-              placeholder="PINコード"
-              style={{ ...inp, fontSize: 18, letterSpacing: 4, textAlign: "center", borderColor: pinError ? C.red : C.border }} />
-            {pinError && <div style={{ fontSize: 12, color: C.red, marginTop: 6 }}>{pinError}</div>}
-            <button onClick={submitPin} style={{ ...bGreen, marginTop: 14 }}>認証する</button>
-          </div>
-        </div>
-      )}
-
-      {/* 日時直接入力モーダル */}
-      {showManualInput && (
-        <div onClick={() => setShowManualInput(false)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          <div onClick={e => e.stopPropagation()}
-            style={{ background: "#fff", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, padding: "20px 16px 40px", maxHeight: "85vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>日時を直接指定</span>
-              <button onClick={() => setShowManualInput(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textLight }}>✕</button>
-            </div>
-
-            {/* リピーター選択 */}
-            <div style={{ marginBottom: 14, padding: 12, background: C.greenBg, borderRadius: 10, border: `1px solid ${C.border}` }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 6 }}>
-                ⭐ リピーターから選択（任意）{repeatersLoading && " 読込中..."}
-              </label>
-              <select value={selectedRepeaterId}
-                onChange={e => { setSelectedRepeaterId(e.target.value); applyRepeaterToBk(e.target.value); }}
-                style={{ ...inp, fontSize: 14 }}>
-                <option value="">— 選択しない —</option>
-                {repeaters.map(r => (
-                  <option key={r.id} value={r.id}>
-                    {r.customerName || "（名前なし）"}{r.customerPhone ? ` / ${r.customerPhone}` : ""}
-                  </option>
-                ))}
-              </select>
-              {selectedRepeaterId && (
-                <div style={{ fontSize: 11, color: C.green, marginTop: 6, fontWeight: 700 }}>
-                  ✓ 次の画面で名前・電話・住所などが自動入力されます
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 4 }}>日付</label>
-              <input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)}
-                style={{ ...inp, fontSize: 15 }} />
-            </div>
-            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 4 }}>時</label>
-                <select value={manualHour} onChange={e => setManualHour(e.target.value)} style={{ ...inp, fontSize: 15 }}>
-                  {Array.from({ length: 11 }, (_, i) => i + 8).map(h => <option key={h} value={h}>{h}時</option>)}
-                </select>
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: C.textMid, display: "block", marginBottom: 4 }}>分</label>
-                <select value={manualMinute} onChange={e => setManualMinute(e.target.value)} style={{ ...inp, fontSize: 15 }}>
-                  {Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{String(m).padStart(2, "0")}分</option>)}
-                </select>
-              </div>
-            </div>
-            <button onClick={() => {
-              if (!manualDate) { alert("日付を選択してください"); return; }
-              const d = new Date(manualDate);
-              d.setHours(parseInt(manualHour), parseInt(manualMinute), 0, 0);
-              if (d < new Date()) { alert("過去の日時は選択できません"); return; }
-              if (selectedRepeaterId) applyRepeaterToBk(selectedRepeaterId);
-              setSlot(d.toISOString());
-              setShowManualInput(false);
-              setStep("form");
-            }} style={bGreen}>この日時で予約へ進む</button>
-          </div>
-        </div>
-      )}
+      {manualInputTrigger}
+      {manualInputModals}
 
       <Footer />
     </div>
