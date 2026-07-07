@@ -325,6 +325,11 @@ function ReservationSystem() {
   const [submitProgress, setSubmitProgress] = useState("");
   const [draftAvailable, setDraftAvailable] = useState(false);
 
+  // 画面（step）が切り替わるたびに、前の画面のスクロール位置が残らないようトップへ戻す
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [step]);
+
   const DRAFT_KEY = "hakobite_reserve_draft_v1";
   const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
