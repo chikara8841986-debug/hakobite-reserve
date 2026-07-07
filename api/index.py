@@ -9,6 +9,7 @@ JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # 空き判定の設定（チューニング前提の定数）
 TRAVEL_BUFFER_BEFORE_MIN = 30   # 予約開始前に確保する移動準備イベントぶんのバッファ
+POST_BOOKING_MARGIN_MIN = 30    # 前の予約終了直後に次の予約を詰め込みすぎないための余白
 BUSINESS_HOUR_START = 8         # 代替候補探索・開始時刻の下限
 BUSINESS_HOUR_END = 18          # 代替候補探索・開始時刻の上限
 
@@ -112,7 +113,9 @@ def _get_busy_intervals_for_date(service, calendar_id, date_str):
     return busy
 
 def _is_window_busy(busy_intervals, window_start, window_end):
-    return any(window_start < b_end and window_end > b_start for b_start, b_end in busy_intervals)
+    # 既存予約の終了直後は POST_BOOKING_MARGIN_MIN 分だけ広げて判定し、詰め込みすぎを防ぐ
+    margin = datetime.timedelta(minutes=POST_BOOKING_MARGIN_MIN)
+    return any(window_start < (b_end + margin) and window_end > b_start for b_start, b_end in busy_intervals)
 
 def _find_alternative_starts(busy_intervals, base_date, duration_minutes, now, requested_start, before_limit=2, after_limit=2):
     """同日内で、移動バッファを含めて空いている開始時刻を、希望時刻より前と後それぞれ近い順に最大limit件ずつ返す。"""
