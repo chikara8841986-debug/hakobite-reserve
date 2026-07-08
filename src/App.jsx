@@ -1170,7 +1170,17 @@ function ReservationSystem() {
 
         <div style={{ padding: "0 12px" }}>
           <div style={card}>
-            <ST icon="📅" title="ご希望日" />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 18, flexWrap: "wrap" }}>
+              <span style={{ background: C.greenBg, color: C.green, fontWeight: 700, padding: "3px 8px", borderRadius: 10, fontSize: 10 }}>①ご希望日</span>
+              <span style={{ color: C.border, fontSize: 11 }}>→</span>
+              <span style={{ background: C.greenBg, color: C.green, fontWeight: 700, padding: "3px 8px", borderRadius: 10, fontSize: 10 }}>②開始時刻</span>
+              <span style={{ color: C.border, fontSize: 11 }}>→</span>
+              <span style={{ background: C.greenBg, color: C.green, fontWeight: 700, padding: "3px 8px", borderRadius: 10, fontSize: 10 }}>③ご利用時間</span>
+              <span style={{ color: C.border, fontSize: 11 }}>→</span>
+              <span style={{ background: C.orangeBg, color: C.orange, fontWeight: 700, padding: "3px 8px", borderRadius: 10, fontSize: 10 }}>④確認</span>
+            </div>
+
+            <ST icon="📅" title="①ご希望日" />
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <button type="button" onClick={() => setSearchCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
                 style={{ width: 32, height: 32, borderRadius: "50%", border: `1px solid ${C.border}`, background: C.white, cursor: "pointer", fontSize: 12 }}>◀</button>
@@ -1205,36 +1215,39 @@ function ReservationSystem() {
                 );
               })}
             </div>
-          </div>
 
-          <div style={card}>
-            <ST icon="🕐" title="開始時刻" />
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <select value={searchStartHour} onChange={e => { setSearchStartHour(e.target.value); setAvailabilityResult(null); }} style={inp}>
-                {SEARCH_HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}時</option>)}
-              </select>
-              <select value={searchStartMinute} onChange={e => { setSearchStartMinute(e.target.value); setAvailabilityResult(null); }} style={inp}>
-                {SEARCH_MINUTE_OPTIONS.map(m => <option key={m} value={m}>{m}分</option>)}
-              </select>
+            <div style={{ borderTop: `1px solid ${C.borderLight}`, marginTop: 18, paddingTop: 18 }}>
+              <ST icon="🕐" title="②開始時刻" />
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <select value={searchStartHour} onChange={e => { setSearchStartHour(e.target.value); setAvailabilityResult(null); }} style={inp}>
+                  {SEARCH_HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}時</option>)}
+                </select>
+                <select value={searchStartMinute} onChange={e => { setSearchStartMinute(e.target.value); setAvailabilityResult(null); }} style={inp}>
+                  {SEARCH_MINUTE_OPTIONS.map(m => <option key={m} value={m}>{m}分</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ borderTop: `1px solid ${C.borderLight}`, marginTop: 18, paddingTop: 18 }}>
+              <ST icon="⏱" title="③ご利用時間" />
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <select value={searchDurationHour} onChange={e => { setSearchDurationHour(e.target.value); setAvailabilityResult(null); }} style={inp}>
+                  {["0", "1", "2", "3", "4", "5"].map(h => <option key={h} value={h}>{h}時間</option>)}
+                </select>
+                <select value={searchDurationMinute} onChange={e => { setSearchDurationMinute(e.target.value); setAvailabilityResult(null); }} style={inp}>
+                  {["0", "30"].map(m => <option key={m} value={m}>{m}分</option>)}
+                </select>
+              </div>
+              <div style={{ fontSize: 11, color: C.textLight, marginTop: 6 }}>合計: {searchDurLabel}（最短30分〜）</div>
+            </div>
+
+            <div style={{ borderTop: `1px solid ${C.borderLight}`, marginTop: 18, paddingTop: 18 }}>
+              <div style={{ fontSize: 11, color: C.textLight, fontWeight: 700, marginBottom: 8 }}>④ 上の内容で空きを確認します</div>
+              <button type="button" onClick={() => checkAvailability()} disabled={checkingAvailability} style={{ ...bOrange, opacity: checkingAvailability ? 0.7 : 1, marginBottom: 0 }}>
+                {checkingAvailability ? "確認中..." : "🔍 空きを確認する"}
+              </button>
             </div>
           </div>
-
-          <div style={card}>
-            <ST icon="⏱" title="ご利用時間" />
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <select value={searchDurationHour} onChange={e => { setSearchDurationHour(e.target.value); setAvailabilityResult(null); }} style={inp}>
-                {["0", "1", "2", "3", "4", "5"].map(h => <option key={h} value={h}>{h}時間</option>)}
-              </select>
-              <select value={searchDurationMinute} onChange={e => { setSearchDurationMinute(e.target.value); setAvailabilityResult(null); }} style={inp}>
-                {["0", "30"].map(m => <option key={m} value={m}>{m}分</option>)}
-              </select>
-            </div>
-            <div style={{ fontSize: 11, color: C.textLight, marginTop: 6 }}>合計: {searchDurLabel}（最短30分〜）</div>
-          </div>
-
-          <button type="button" onClick={() => checkAvailability()} disabled={checkingAvailability} style={{ ...bOrange, opacity: checkingAvailability ? 0.7 : 1 }}>
-            {checkingAvailability ? "確認中..." : "🔍 空きを確認する"}
-          </button>
 
           {availabilityResult && (
             <div style={{ ...card, marginTop: 14 }}>
