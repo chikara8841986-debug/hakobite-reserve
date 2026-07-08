@@ -54,9 +54,9 @@ function computeDefaultSearchStart() {
 }
 function getInitialReserveStep() {
   try {
-    return new URLSearchParams(window.location.search).get("mode") === "calendar" ? "slots" : "search";
+    return new URLSearchParams(window.location.search).get("mode") === "search" ? "search" : "slots";
   } catch {
-    return "search";
+    return "slots";
   }
 }
 const SEARCH_HOUR_OPTIONS = Array.from({ length: 11 }, (_, i) => String(i + 8).padStart(2, "0"));
