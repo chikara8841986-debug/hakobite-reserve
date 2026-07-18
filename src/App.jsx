@@ -819,7 +819,7 @@ function ReservationSystem() {
         {!["ソーシャルワーカー", "ふじ介護タクシー"].includes(bk.bookerType) && (
           <p style={{ color: C.textMid, fontSize: 12, lineHeight: 1.7, marginBottom: 20 }}>確認のご連絡を差し上げます。</p>
         )}
-        <button onClick={() => { setAvailabilityResult(null); setDurationFromSearch(false); setStep("search"); }} style={bGreen}>もう一度予約する</button>
+        <button onClick={() => { setAvailabilityResult(null); setDurationFromSearch(false); refreshBusy(); setStep("slots"); setWOff(0); }} style={bGreen}>カレンダーに戻る</button>
       </div>
     </div>
   );
