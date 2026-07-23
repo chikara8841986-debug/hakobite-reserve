@@ -1,26 +1,46 @@
 import { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
 
 // ============================================================
 // 運賃設定
 // ============================================================
 const FARE = {
-  baseFare: 800, meterFare: 100, meterDistance: 0.265,
+  baseFare: 800, meterFare: 100,
+  // 実際の運賃は「275mごと100円」＋信号待ち等による時間加算を含む時間距離併用制。
+  // ここでは時間加算分をおおよそ織り込むため、意図的に265m刻みで計算している。
+  // 275mに"修正"しないこと（2026-07-20 代表確認済みの仕様）。
+  meterDistance: 0.265,
+  pickupFee: 100,
   welfareFee: 1000, careFee: 500,
+  waitingFeePer110Sec: 100,
   wheelchair: { normal: 500, reclining: 700 }
 };
 function calculateFare(distKm, opts = {}) {
   if (distKm <= 0) return null;
-  const { needsCare = false, wheelchairType = "none" } = opts;
-  let mf = FARE.baseFare + Math.ceil(distKm / FARE.meterDistance) * FARE.meterFare;
+  const { needsCare = false, wheelchairType = "none", roundTrip = false, waitingMinutes = 0 } = opts;
+  const increments = Math.ceil(distKm / FARE.meterDistance);
+  const meterIncrementFare = increments * FARE.meterFare;
+  const tripMultiplier = roundTrip ? 2 : 1;
+  const baseFare = FARE.baseFare * tripMultiplier;
+  const meterFare = meterIncrementFare * tripMultiplier;
+  const pickupFee = FARE.pickupFee;
   const cf = needsCare ? FARE.careFee : 0;
   let wf = 0;
   if (wheelchairType === "normal") wf = FARE.wheelchair.normal;
   if (wheelchairType === "reclining") wf = FARE.wheelchair.reclining;
-  return { meterFare: mf, welfareFee: FARE.welfareFee, careFee: cf, wheelchairFee: wf, total: mf + FARE.welfareFee + cf + wf };
+  const waitingFee = waitingMinutes > 0 ? Math.floor((waitingMinutes * 60) / 110) * FARE.waitingFeePer110Sec : 0;
+  const total = baseFare + meterFare + pickupFee + FARE.welfareFee + cf + wf + waitingFee;
+  return {
+    baseFare, meterFare, increments, roundTrip,
+    pickupFee, welfareFee: FARE.welfareFee, careFee: cf, wheelchairFee: wf,
+    waitingFee, waitingMinutes,
+    total
+  };
 }
 const fmt = n => n.toLocaleString();
+const PRICE_HANDOFF_KEY = "hakobite_price_to_reserve_v1";
+const WAITING_MINUTE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5); // 0,5,...,120
 
 // ============================================================
 // 移動時間計算ユーティリティ
@@ -178,7 +198,7 @@ function RG({ options, value, onChange }) {
   return <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>{options.map(o => { const v = typeof o === "string" ? o : o.value, l = typeof o === "string" ? o : o.label, a = value === v; return <label key={v} onClick={() => onChange(v)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 7, cursor: "pointer", background: a ? C.greenBg : C.cream, border: `1.5px solid ${a ? C.green : C.borderLight}` }}><div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${a ? C.green : "#ccc"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{a && <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />}</div><span style={{ fontSize: 13, color: a ? C.green : C.textMid, fontWeight: a ? 600 : 400 }}>{l}</span></label>; })}</div>;
 }
 function Footer() {
-  return <div style={{ marginTop: 24, textAlign: "center", fontSize: 11, color: C.textMid, lineHeight: 1.9, paddingBottom: 16 }}><div>香川県内限定サービス ・ 迎車料金は含まれません</div><div style={{ fontSize: 10, color: C.textLight }}>ハコビテ — 移動と暮らしを、支える</div></div>;
+  return <div style={{ marginTop: 24, textAlign: "center", fontSize: 11, color: C.textMid, lineHeight: 1.9, paddingBottom: 16 }}><div>香川県内限定サービス</div><div style={{ fontSize: 10, color: C.textLight }}>ハコビテ — 移動と暮らしを、支える</div></div>;
 }
 function PriceLink() {
   return <a href="https://hakobite-reserve.vercel.app/price" style={{ textDecoration: "none", display: "block" }}><div style={{ ...card, marginBottom: 0, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, borderLeft: `4px solid ${C.green}`, cursor: "pointer" }}><span style={{ fontSize: 20 }}>🧮</span><div><div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>料金の試算はこちら →</div><div style={{ fontSize: 10, color: C.textLight, marginTop: 1 }}>距離とオプションから概算料金を確認</div></div></div></a>;
@@ -227,13 +247,35 @@ function Home() {
 // 2. 料金試算
 // ============================================================
 function PriceCalculator() {
+  const navigate = useNavigate();
   const [km, setKm] = useState("");
   const [care, setCare] = useState(false);
   const [wc, setWc] = useState("none");
+  const [roundTrip, setRoundTrip] = useState(false);
+  const [waitingMinutes, setWaitingMinutes] = useState("0");
   const [res, setRes] = useState(null);
+  const [calcError, setCalcError] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const calc = () => { const d = parseFloat(km); if (d > 0) setRes(calculateFare(d, { needsCare: care, wheelchairType: wc })); };
+  const [distanceLoading, setDistanceLoading] = useState(false);
+  const [distanceInfo, setDistanceInfo] = useState("");
+  const [distanceError, setDistanceError] = useState("");
+
+  // 距離・オプションのいずれかが変わったら、古い金額の誤読を防ぐため前回結果を消す
+  useEffect(() => {
+    setRes(null);
+    setCalcError("");
+  }, [km, care, wc, roundTrip, waitingMinutes]);
+
+  const calc = () => {
+    const d = parseFloat(km);
+    if (!(d > 0)) {
+      setCalcError("走行距離を入力するか、住所から自動計算してください");
+      return;
+    }
+    setCalcError("");
+    setRes(calculateFare(d, { needsCare: care, wheelchairType: wc, roundTrip, waitingMinutes: parseInt(waitingMinutes, 10) || 0 }));
+  };
 
   const openMap = () => {
     if (!from && !to) return;
@@ -241,6 +283,38 @@ function PriceCalculator() {
     const origin = from ? `&origin=${encodeURIComponent(from)}` : "";
     const dest = to ? `&destination=${encodeURIComponent(to)}` : "";
     window.open(base + origin + dest, "_blank");
+  };
+
+  const autoCalcDistance = async () => {
+    if (!from.trim() || !to.trim()) {
+      setDistanceError("出発地と目的地の両方を入力してください");
+      return;
+    }
+    setDistanceLoading(true);
+    setDistanceError("");
+    setDistanceInfo("");
+    try {
+      const params = new URLSearchParams({ origin: from, destination: to });
+      const r = await fetch(`/api/distance?${params.toString()}`, { cache: "no-store" });
+      const data = await r.json();
+      if (!r.ok || data.error) {
+        setDistanceError(data.error || "距離を取得できませんでした");
+        return;
+      }
+      setKm(String(data.distance_km));
+      setDistanceInfo(`${data.distance_text}（車で${data.duration_text}）`);
+    } catch {
+      setDistanceError("通信エラーが発生しました。お手数ですが手入力をお試しください。");
+    } finally {
+      setDistanceLoading(false);
+    }
+  };
+
+  const goToReserve = () => {
+    try {
+      sessionStorage.setItem(PRICE_HANDOFF_KEY, JSON.stringify({ from, to }));
+    } catch {}
+    navigate("/reserve");
   };
 
   return (
@@ -252,11 +326,29 @@ function PriceCalculator() {
       <div style={card}>
         <ST icon="🧮" title="料金試算" />
 
-        {/* 出発地・目的地 → Googleマップでルート確認 */}
+        {/* 出発地・目的地 → 距離を自動計算 / Googleマップでルート確認 */}
         <div style={{ marginBottom: 14, padding: "12px 14px", background: C.blueBg, borderRadius: 10, border: `1px solid ${C.blue}30` }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 8 }}>🗺️ Googleマップでルートを確認</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 8 }}>🗺️ 出発地・目的地から距離を調べる</div>
           <FF label="出発地"><input type="text" placeholder="例：善通寺市役所" value={from} onChange={e => setFrom(e.target.value)} style={inp} /></FF>
           <FF label="目的地"><input type="text" placeholder="例：丸亀市民病院" value={to} onChange={e => setTo(e.target.value)} style={inp} /></FF>
+          <button
+            type="button"
+            onClick={autoCalcDistance}
+            disabled={!from.trim() || !to.trim() || distanceLoading}
+            style={{ ...bGreen, opacity: (!from.trim() || !to.trim() || distanceLoading) ? 0.5 : 1, marginBottom: 8 }}
+          >
+            {distanceLoading ? "計算中…" : "🚕 住所から距離を自動計算"}
+          </button>
+          {distanceInfo && (
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 8, padding: "8px 10px", background: "#fff", borderRadius: 6 }}>
+              ✓ {distanceInfo}・下の走行距離欄に自動入力しました
+            </div>
+          )}
+          {distanceError && (
+            <div style={{ fontSize: 11, color: C.red, marginBottom: 8, padding: "8px 10px", background: "#fff", borderRadius: 6 }}>
+              ⚠ {distanceError}
+            </div>
+          )}
           <button
             type="button"
             onClick={openMap}
@@ -266,12 +358,25 @@ function PriceCalculator() {
             🗺️ Googleマップでルートを開く
           </button>
           <div style={{ fontSize: 10, color: C.textLight, marginTop: 6 }}>
-            マップで距離を確認して、下の「走行距離」欄に入力してください。
+            自動計算がうまくいかない場合は、マップで距離を確認して下の「走行距離」欄に入力してください。
           </div>
         </div>
 
-        <FF label="走行距離（km）" required><input type="number" step="0.1" min="0" inputMode="decimal" placeholder="例: 5.2" value={km} onChange={e => setKm(e.target.value)} style={inp} /></FF>
-        <Toggle active={care} onToggle={() => setCare(!care)} icon="🤝" label="身体介護等あり" sub="＋500円" color={C.orange} abg={C.orangeBg} />
+        <FF label="走行距離（km）" required error={calcError}><input type="number" step="0.1" min="0" inputMode="decimal" placeholder="例: 5.2" value={km} onChange={e => setKm(e.target.value)} style={inp} /></FF>
+        <Toggle active={care} onToggle={() => setCare(!care)} icon="🤝" label="身体介助等あり" sub="＋500円" color={C.orange} abg={C.orangeBg} />
+        <Toggle active={roundTrip} onToggle={() => setRoundTrip(!roundTrip)} icon="🔄" label="往復で試算する" sub="開始運賃・加算運賃を2倍で計算" color={C.orange} abg={C.orangeBg} />
+        {roundTrip && (
+          <div style={{ fontSize: 11, color: C.orange, background: C.orangeBg, borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
+            💡 通院で待ち時間がある場合は、下の「待機時間」も選ぶと実際の料金に近づきます
+          </div>
+        )}
+        <FF label="待機時間（病院での待ち時間など）">
+          <select value={waitingMinutes} onChange={e => setWaitingMinutes(e.target.value)} style={inp}>
+            {WAITING_MINUTE_OPTIONS.map(m => (
+              <option key={m} value={m}>{m === 0 ? "0分（待機なし）" : `${m}分`}</option>
+            ))}
+          </select>
+        </FF>
         <div style={{ fontSize: 12, fontWeight: 600, color: C.textMid, margin: "12px 0 6px" }}>🦽 車椅子レンタル（日をまたぐ場合）</div>
         <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
           {[{ v: "none", l: "なし", s: "" }, { v: "normal", l: "普通型", s: "＋500円" }, { v: "reclining", l: "リクライニング", s: "＋700円" }].map(o => (
@@ -285,22 +390,28 @@ function PriceCalculator() {
         {res && (
           <div style={{ marginTop: 14, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}`, animation: "fadeIn 0.3s ease-out" }}>
             <div style={{ padding: "16px 14px", textAlign: "center", background: `linear-gradient(135deg,${C.greenBg},#f0f7e8)`, borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 10, color: C.textLight, letterSpacing: "0.1em", marginBottom: 3 }}>推定合計料金（片道）</div>
+              <div style={{ fontSize: 10, color: C.textLight, letterSpacing: "0.1em", marginBottom: 3 }}>推定合計料金{res.roundTrip ? "（往復）" : "（片道）"}</div>
               <div style={{ fontSize: 34, fontWeight: 800, color: C.green, lineHeight: 1.1 }}>¥{fmt(res.total)}</div>
             </div>
             <div style={{ padding: "12px 14px" }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.textLight, marginBottom: 6 }}>📋 内訳</div>
-              <BR label={`メーター運賃（${parseFloat(km).toFixed(1)}km）`} value={res.meterFare} bg={C.greenBg} color={C.green} />
+              <BR label={`開始運賃${res.roundTrip ? "（往復×2）" : ""}`} value={res.baseFare} bg={C.greenBg} color={C.green} />
+              <BR label={`加算運賃（${parseFloat(km).toFixed(1)}km${res.roundTrip ? "×往復" : ""}）`} value={res.meterFare} bg={C.greenBg} color={C.green} />
+              <BR label="迎車料金" value={res.pickupFee} bg={C.greenBg} color={C.green} />
               <BR label="福祉車両代" value={res.welfareFee} bg={C.orangeBg} color={C.orange} />
-              {res.careFee > 0 && <BR label="身体介護等" value={res.careFee} bg={C.redBg} color={C.red} />}
+              {res.careFee > 0 && <BR label="身体介助等" value={res.careFee} bg={C.redBg} color={C.red} />}
+              {res.waitingFee > 0 && <BR label={`待機料金（${res.waitingMinutes}分）`} value={res.waitingFee} bg={C.pinkBg} color={C.pink} />}
               {res.wheelchairFee > 0 && <BR label={`車椅子（${wc === "reclining" ? "リクライニング" : "普通型"}）`} value={res.wheelchairFee} bg={C.purpleBg} color={C.purple} note="日またぎ" />}
               <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 10px", marginTop: 6, borderTop: `2px solid ${C.border}` }}>
                 <span style={{ fontSize: 13, fontWeight: 700 }}>合計</span><span style={{ fontSize: 18, fontWeight: 800, color: C.green }}>¥{fmt(res.total)}</span>
               </div>
             </div>
             <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}`, background: C.cream, fontSize: 10, color: C.textMid, lineHeight: 1.6 }}>
-              初乗り: {FARE.baseFare}円 ｜ 加算: {FARE.meterFare}円/275m（全距離適用）<br />福祉車両代{fmt(FARE.welfareFee)}円は基本に含まれます
-              <div style={{ color: C.textLight, marginTop: 2 }}>※ 交通状況等により変動します</div>
+              開始運賃: {FARE.baseFare}円 ｜ 迎車料金: {FARE.pickupFee}円 ｜ 福祉車両代{fmt(FARE.welfareFee)}円は基本に含まれます
+              <div style={{ color: C.textLight, marginTop: 2 }}>※ 実際の運賃は275mごと100円＋信号待ち等の時間加算です。この試算は時間加算分を含めた概算です。交通状況等により変動します。</div>
+            </div>
+            <div style={{ padding: "12px 14px", borderTop: `1px solid ${C.border}` }}>
+              <button type="button" onClick={goToReserve} style={bOrange}>📅 この内容で予約に進む</button>
             </div>
           </div>
         )}
@@ -335,16 +446,34 @@ function ReservationSystem() {
 
   // 起動時にドラフトの有無をチェック
   useEffect(() => {
+    let hasValidDraft = false;
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const obj = JSON.parse(raw);
-      if (!obj || !obj.savedAt) return;
-      if (Date.now() - new Date(obj.savedAt).getTime() > DRAFT_MAX_AGE_MS) {
-        localStorage.removeItem(DRAFT_KEY);
-        return;
+      if (raw) {
+        const obj = JSON.parse(raw);
+        if (obj && obj.savedAt) {
+          if (Date.now() - new Date(obj.savedAt).getTime() > DRAFT_MAX_AGE_MS) {
+            localStorage.removeItem(DRAFT_KEY);
+          } else {
+            hasValidDraft = true;
+            setDraftAvailable(true);
+          }
+        }
       }
-      setDraftAvailable(true);
+    } catch {}
+
+    // 料金試算からの引き継ぎ（読んだら即削除。ドラフトがある場合はドラフトを優先し適用しない）
+    try {
+      const raw = sessionStorage.getItem(PRICE_HANDOFF_KEY);
+      if (raw) {
+        sessionStorage.removeItem(PRICE_HANDOFF_KEY);
+        if (!hasValidDraft) {
+          const handoff = JSON.parse(raw);
+          if (handoff && (handoff.from || handoff.to)) {
+            setBk(prev => ({ ...prev, from: handoff.from || prev.from, to: handoff.to || prev.to }));
+          }
+        }
+      }
     } catch {}
   }, []);
 
