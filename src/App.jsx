@@ -257,9 +257,6 @@ function PriceCalculator() {
   const [calcError, setCalcError] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [distanceLoading, setDistanceLoading] = useState(false);
-  const [distanceInfo, setDistanceInfo] = useState("");
-  const [distanceError, setDistanceError] = useState("");
 
   // 距離・オプションのいずれかが変わったら、古い金額の誤読を防ぐため前回結果を消す
   useEffect(() => {
@@ -270,7 +267,7 @@ function PriceCalculator() {
   const calc = () => {
     const d = parseFloat(km);
     if (!(d > 0)) {
-      setCalcError("走行距離を入力するか、住所から自動計算してください");
+      setCalcError("走行距離を入力してください");
       return;
     }
     setCalcError("");
@@ -283,31 +280,6 @@ function PriceCalculator() {
     const origin = from ? `&origin=${encodeURIComponent(from)}` : "";
     const dest = to ? `&destination=${encodeURIComponent(to)}` : "";
     window.open(base + origin + dest, "_blank");
-  };
-
-  const autoCalcDistance = async () => {
-    if (!from.trim() || !to.trim()) {
-      setDistanceError("出発地と目的地の両方を入力してください");
-      return;
-    }
-    setDistanceLoading(true);
-    setDistanceError("");
-    setDistanceInfo("");
-    try {
-      const params = new URLSearchParams({ origin: from, destination: to });
-      const r = await fetch(`/api/distance?${params.toString()}`, { cache: "no-store" });
-      const data = await r.json();
-      if (!r.ok || data.error) {
-        setDistanceError(data.error || "距離を取得できませんでした");
-        return;
-      }
-      setKm(String(data.distance_km));
-      setDistanceInfo(`${data.distance_text}（車で${data.duration_text}）`);
-    } catch {
-      setDistanceError("通信エラーが発生しました。お手数ですが手入力をお試しください。");
-    } finally {
-      setDistanceLoading(false);
-    }
   };
 
   const goToReserve = () => {
@@ -326,29 +298,11 @@ function PriceCalculator() {
       <div style={card}>
         <ST icon="🧮" title="料金試算" />
 
-        {/* 出発地・目的地 → 距離を自動計算 / Googleマップでルート確認 */}
+        {/* 出発地・目的地 → Googleマップでルート確認 */}
         <div style={{ marginBottom: 14, padding: "12px 14px", background: C.blueBg, borderRadius: 10, border: `1px solid ${C.blue}30` }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 8 }}>🗺️ 出発地・目的地から距離を調べる</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 8 }}>🗺️ Googleマップでルートを確認</div>
           <FF label="出発地"><input type="text" placeholder="例：善通寺市役所" value={from} onChange={e => setFrom(e.target.value)} style={inp} /></FF>
           <FF label="目的地"><input type="text" placeholder="例：丸亀市民病院" value={to} onChange={e => setTo(e.target.value)} style={inp} /></FF>
-          <button
-            type="button"
-            onClick={autoCalcDistance}
-            disabled={!from.trim() || !to.trim() || distanceLoading}
-            style={{ ...bGreen, opacity: (!from.trim() || !to.trim() || distanceLoading) ? 0.5 : 1, marginBottom: 8 }}
-          >
-            {distanceLoading ? "計算中…" : "🚕 住所から距離を自動計算"}
-          </button>
-          {distanceInfo && (
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 8, padding: "8px 10px", background: "#fff", borderRadius: 6 }}>
-              ✓ {distanceInfo}・下の走行距離欄に自動入力しました
-            </div>
-          )}
-          {distanceError && (
-            <div style={{ fontSize: 11, color: C.red, marginBottom: 8, padding: "8px 10px", background: "#fff", borderRadius: 6 }}>
-              ⚠ {distanceError}
-            </div>
-          )}
           <button
             type="button"
             onClick={openMap}
@@ -358,7 +312,7 @@ function PriceCalculator() {
             🗺️ Googleマップでルートを開く
           </button>
           <div style={{ fontSize: 10, color: C.textLight, marginTop: 6 }}>
-            自動計算がうまくいかない場合は、マップで距離を確認して下の「走行距離」欄に入力してください。
+            マップで距離を確認して、下の「走行距離」欄に入力してください。
           </div>
         </div>
 
