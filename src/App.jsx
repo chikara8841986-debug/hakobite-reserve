@@ -437,7 +437,7 @@ function ReservationSystem() {
       if (!raw) return;
       const { bk: savedBk, slot: savedSlot, durationMinutes: savedDuration, durationFromSearch: savedDurationFromSearch } = JSON.parse(raw);
       if (savedBk) setBk(savedBk);
-      setDurationMinutes(typeof savedDuration === "number" ? savedDuration : 60);
+      setDurationMinutes(typeof savedDuration === "number" ? savedDuration : 0);
       setDurationFromSearch(Boolean(savedDurationFromSearch));
       if (savedSlot) {
         setSlot(savedSlot);
@@ -562,7 +562,7 @@ function ReservationSystem() {
     name: "", tel: "", email: "",
     serviceType: "介護タクシー",
     from: "", wardRoom: "", to: "",
-    wheelchair: "利用なし",
+    wheelchair: "",
     careReq: "車の乗降介助程度",
     passengers: "1名",
     bookerType: "本人",
@@ -575,7 +575,7 @@ function ReservationSystem() {
     note: ""
   });
 
-  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [durationMinutes, setDurationMinutes] = useState(0);
   const [durationFromSearch, setDurationFromSearch] = useState(false);
   const [fallbackNotice, setFallbackNotice] = useState("");
   const [searchDate, setSearchDate] = useState(() => ymd(computeDefaultSearchStart().date));
@@ -657,6 +657,8 @@ function ReservationSystem() {
     if (!bk.name.trim()) e.name = "お名前を入力してください";
     if (!bk.tel.trim()) e.tel = "電話番号を入力してください";
     if (!bk.from.trim()) e.from = "お迎え場所を入力してください";
+    if (!bk.wheelchair) e.wheelchair = "車椅子が必要かどうかを選択してください";
+    if (!durationFromSearch && !durationMinutes) e.duration = "ご利用時間を選択してください";
     if (bookerRequiresName && !isFujiKaigo && !bk.bookerName.trim()) e.bookerName = `${bookerNameLabel}を入力してください`;
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -877,7 +879,7 @@ function ReservationSystem() {
               if (selectedRepeaterId) applyRepeaterToBk(selectedRepeaterId);
               setSlot(d.toISOString());
               setDurationFromSearch(false);
-              setDurationMinutes(30);
+              setDurationMinutes(0);
               setShowManualInput(false);
               setStep("form");
             }} style={bGreen}>この日時で予約へ進む</button>
@@ -1055,9 +1057,10 @@ function ReservationSystem() {
                 <button type="button" onClick={() => setStep("search")} style={{ background: "none", border: "none", color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>← 条件を変えて再検索</button>
               </div>
             ) : (
-              <FF label="ご利用予定時間" required>
-                <select value={formatDuration(durationMinutes)} onChange={e => setDurationMinutes(durMap[e.target.value])} style={inp}>
-                  {Object.keys(durMap).map(d => <option key={d}>{d}</option>)}
+              <FF label="ご利用予定時間" required error={errors.duration}>
+                <select value={durationMinutes || ""} onChange={e => { setDurationMinutes(Number(e.target.value)); setErrors(p => ({ ...p, duration: "" })); }} style={{ ...inp, borderColor: errors.duration ? C.red : C.border }}>
+                  <option value="" disabled>選択してください</option>
+                  {Object.entries(durMap).map(([label, mins]) => <option key={label} value={mins}>{label}</option>)}
                 </select>
               </FF>
             )}
@@ -1165,7 +1168,7 @@ function ReservationSystem() {
           <div style={card}>
             <ST icon="♿" title="介助・車椅子" />
             <FF label="介助の必要性" required><RG options={[{ value: "車の乗降介助程度", label: "車の乗降介助程度" }, { value: "身体介護等あり", label: "身体介護等あり（＋500円）" }]} value={bk.careReq} onChange={v => ub("careReq", v)} /></FF>
-            <FF label="車椅子" required><RG options={[{ value: "利用なし", label: "利用なし" }, { value: "自分の車椅子を使用", label: "自分の車椅子を使用" }, { value: "普通型レンタル", label: "普通型をレンタル（日またぎ＋500円）" }, { value: "リクライニング型レンタル", label: "リクライニング型をレンタル（日またぎ＋700円）" }]} value={bk.wheelchair} onChange={v => ub("wheelchair", v)} /></FF>
+            <FF label="車椅子" required error={errors.wheelchair}><RG options={[{ value: "利用なし", label: "利用なし" }, { value: "自分の車椅子を使用", label: "自分の車椅子を使用" }, { value: "普通型レンタル", label: "普通型をレンタル（日またぎ＋500円）" }, { value: "リクライニング型レンタル", label: "リクライニング型をレンタル（日またぎ＋700円）" }]} value={bk.wheelchair} onChange={v => { ub("wheelchair", v); setErrors(p => ({ ...p, wheelchair: "" })); }} /></FF>
             <FF label="乗車人数"><select value={bk.passengers} onChange={e => ub("passengers", e.target.value)} style={inp}>{["1名", "2名（付き添い1名）", "3名（付き添い2名）"].map(p => <option key={p}>{p}</option>)}</select></FF>
           </div>
           <div style={card}>
@@ -1524,7 +1527,7 @@ function ReservationSystem() {
                       }
                       return (
                         <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, padding: 0, textAlign: "center" }}>
-                          <button className="resv-slot-btn" onClick={() => { setSlot(sd.toISOString()); setDurationFromSearch(false); setDurationMinutes(30); setStep("form"); }} aria-label={`${d.getMonth()+1}月${d.getDate()}日 ${t.h}:${t.m.toString().padStart(2, "0")} の予約に進む`}>
+                          <button className="resv-slot-btn" onClick={() => { setSlot(sd.toISOString()); setDurationFromSearch(false); setDurationMinutes(0); setStep("form"); }} aria-label={`${d.getMonth()+1}月${d.getDate()}日 ${t.h}:${t.m.toString().padStart(2, "0")} の予約に進む`}>
                             ○
                           </button>
                         </td>
