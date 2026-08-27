@@ -385,6 +385,7 @@ function PriceCalculator() {
 // ============================================================
 function ReservationSystem() {
   const [step, setStep] = useState(getInitialReserveStep);
+  const [formStep, setFormStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState("");
@@ -393,7 +394,7 @@ function ReservationSystem() {
   // 画面（step）が切り替わるたびに、前の画面のスクロール位置が残らないようトップへ戻す
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [step]);
+  }, [step, formStep]);
 
   const DRAFT_KEY = "hakobite_reserve_draft_v1";
   const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -441,6 +442,7 @@ function ReservationSystem() {
       setDurationFromSearch(Boolean(savedDurationFromSearch));
       if (savedSlot) {
         setSlot(savedSlot);
+        setFormStep(0);
         setStep("form");
       }
       setDraftAvailable(false);
@@ -560,8 +562,11 @@ function ReservationSystem() {
   }, [step]);
   const [bk, setBk] = useState({
     name: "", tel: "", email: "",
-    serviceType: "介護タクシー",
+    serviceType: "",
     from: "", wardRoom: "", to: "",
+    waypoints: [],
+    workDetail: "",
+    destAssist: "",
     wheelchair: "",
     careReq: "車の乗降介助程度",
     passengers: "1名",
@@ -590,7 +595,7 @@ function ReservationSystem() {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [availabilityResult, setAvailabilityResult] = useState(null);
 
-  const durMap = { "30分": 30, "1時間": 60, "1時間30分": 90, "2時間": 120, "2時間30分": 150, "3時間": 180, "4時間": 240, "5時間": 300 };
+  const durMap = { "30分": 30, "1時間": 60, "1時間30分": 90, "2時間": 120, "2時間30分": 150, "3時間": 180, "3時間30分": 210, "4時間": 240, "5時間": 300, "6時間": 360, "7時間": 420, "8時間": 480 };
   const dn = ["日", "月", "火", "水", "木", "金", "土"];
   const bd = new Date(); bd.setHours(0, 0, 0, 0); bd.setDate(bd.getDate() + wOff * 7);
   const wd = Array.from({ length: 7 }, (_, i) => { const d = new Date(bd); d.setDate(d.getDate() + i); return d; });
@@ -640,6 +645,7 @@ function ReservationSystem() {
     setSlot(d.toISOString());
     setDurationMinutes(availabilityResult.checkedDurationMinutes);
     setDurationFromSearch(true);
+    setFormStep(0);
     setStep("form");
   };
 
@@ -652,13 +658,59 @@ function ReservationSystem() {
     } catch {}
   }, [bk, slot, durationMinutes, durationFromSearch]);
 
+  // 選んだ枠に対して所要時間が長すぎて次の予約と重なっていないか
+  const conflictsFor = (mins) => {
+    if (!slot || !mins) return false;
+    const sMs = new Date(slot).getTime(), eMs = sMs + mins * 60000;
+    return busy.some(b => sMs < new Date(b.end).getTime() && eMs > new Date(b.start).getTime());
+  };
+  const durationConflicts = () => conflictsFor(durationMinutes);
+
+  // ステップごとの入力チェック（そのステップの項目だけを見る）
+  const validateFormStep = (key) => {
+    const e = {};
+    const isTaxiSvc = bk.serviceType === "介護タクシー";
+    if (key === "service" && !bk.serviceType) e.serviceType = "ご利用内容を選択してください";
+    if (key === "route") {
+      if (!bk.from.trim()) e.from = isTaxiSvc ? "出発地を入力してください" : "作業場所を入力してください";
+      if (isTaxiSvc && !bk.to.trim()) e.to = "目的地を入力してください";
+      if (!isTaxiSvc && !bk.workDetail.trim()) e.workDetail = "ご依頼内容を入力してください";
+    }
+    if (key === "equip" && !bk.wheelchair) e.wheelchair = "車椅子が必要かどうかを選択してください";
+    if (key === "user") {
+      if (!bk.name.trim()) e.name = "ご利用者のお名前を入力してください";
+      if (isTaxiSvc && !bk.destAssist) e.destAssist = "目的地での付き添い・介助の要否を選択してください";
+    }
+    if (key === "duration") {
+      if (!durationMinutes) e.duration = "所要時間の目安を選択してください";
+      else if (durationConflicts()) e.duration = "この所要時間だと次のご予約と重なります。短くするか、別の時間帯をお選びください。";
+    }
+    if (key === "booker") {
+      if (!bk.tel.trim()) e.tel = "電話番号を入力してください";
+      if (bookerRequiresName && !isFujiKaigo && !bk.bookerName.trim()) e.bookerName = `${bookerNameLabel}を入力してください`;
+      if (!(bk.payments || []).length) e.payments = "お支払い方法を選択してください";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  // 確認画面へ進む直前の総点検（どこかのステップを飛ばしていないか）
   const validate = () => {
     const e = {};
-    if (!bk.name.trim()) e.name = "お名前を入力してください";
+    const isTaxiSvc = bk.serviceType === "介護タクシー";
+    if (!bk.serviceType) e.serviceType = "ご利用内容を選択してください";
+    if (!bk.name.trim()) e.name = "ご利用者のお名前を入力してください";
     if (!bk.tel.trim()) e.tel = "電話番号を入力してください";
-    if (!bk.from.trim()) e.from = "お迎え場所を入力してください";
-    if (!bk.wheelchair) e.wheelchair = "車椅子が必要かどうかを選択してください";
-    if (!durationFromSearch && !durationMinutes) e.duration = "ご利用時間を選択してください";
+    if (!bk.from.trim()) e.from = isTaxiSvc ? "出発地を入力してください" : "作業場所を入力してください";
+    if (isTaxiSvc) {
+      if (!bk.to.trim()) e.to = "目的地を入力してください";
+      if (!bk.wheelchair) e.wheelchair = "車椅子が必要かどうかを選択してください";
+      if (!bk.destAssist) e.destAssist = "目的地での付き添い・介助の要否を選択してください";
+    } else if (!bk.workDetail.trim()) {
+      e.workDetail = "ご依頼内容を入力してください";
+    }
+    if (!durationFromSearch && !durationMinutes) e.duration = "所要時間の目安を選択してください";
+    if (!(bk.payments || []).length) e.payments = "お支払い方法を選択してください";
     if (bookerRequiresName && !isFujiKaigo && !bk.bookerName.trim()) e.bookerName = `${bookerNameLabel}を入力してください`;
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -710,6 +762,7 @@ function ReservationSystem() {
     const familyInfo = isFujiKaigo ? `\n■家族・病院担当者名: ${bk.familyHospitalStaffName}` : "";
     const careNotesInfo = bk.careNotes ? `\n■ご利用に際しての留意事項: ${bk.careNotes}` : "";
 
+    const wpList = (bk.waypoints || []).map(w => w.trim()).filter(Boolean);
     const det = [
       `■日時: ${dStr} ～ ${eStr} (${formatDuration(durationMinutes)})`,
       `■サービス: ${bk.serviceType}`,
@@ -718,9 +771,12 @@ function ReservationSystem() {
       `■メール: ${bk.email || "未入力"}`,
       bookerInfo + familyInfo + careNotesInfo,
       `■お迎え: ${bk.from}${bk.wardRoom ? `（${bk.wardRoom}）` : ""}`,
-      `■目的地: ${bk.to}`,
+      ...(wpList.length ? [`■経由地: ${wpList.join(" → ")}`] : []),
+      `■目的地: ${bk.to || "なし"}`,
+      ...(bk.workDetail ? [`■ご依頼内容: ${bk.workDetail}`] : []),
       `■車椅子: ${bk.wheelchair}`,
       `■介助: ${bk.careReq}`,
+      ...(bk.destAssist ? [`■目的地での付き添い・介助: ${bk.destAssist}`] : []),
       `■人数: ${bk.passengers}`,
       `■支払: ${(bk.payments || []).join(" / ")}`,
       `■備考: ${bk.note || "なし"}`
@@ -880,6 +936,7 @@ function ReservationSystem() {
               setSlot(d.toISOString());
               setDurationFromSearch(false);
               setDurationMinutes(0);
+              setFormStep(0);
               setShowManualInput(false);
               setStep("form");
             }} style={bGreen}>この日時で予約へ進む</button>
@@ -911,6 +968,7 @@ function ReservationSystem() {
 
   // --- 確認画面 ---
   if (step === "confirm") {
+    const isTaxiConfirm = bk.serviceType === "介護タクシー";
     const sD = slot ? new Date(slot) : null;
     const eD = sD ? new Date(sD.getTime() + durationMinutes * 60000) : null;
     const dateStr = sD ? sD.toLocaleString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
@@ -966,16 +1024,21 @@ function ReservationSystem() {
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, marginBottom: 4, paddingBottom: 4, borderBottom: `2px solid ${C.borderLight}` }}>📍 サービス・行程</div>
             <ConfirmRow label="サービス種別" value={bk.serviceType} />
-            <ConfirmRow label="お迎え場所" value={bk.from} />
+            <ConfirmRow label={isTaxiConfirm ? "お迎え場所" : "作業場所"} value={bk.from} />
             {bk.wardRoom && <ConfirmRow label="病棟・病室" value={bk.wardRoom} />}
-            <ConfirmRow label="目的地" value={bk.to || "未入力"} />
+            {isTaxiConfirm && (bk.waypoints || []).filter(w => w.trim()).length > 0 && (
+              <ConfirmRow label="経由地" value={(bk.waypoints || []).filter(w => w.trim()).join(" → ")} highlight />
+            )}
+            {isTaxiConfirm && <ConfirmRow label="目的地" value={bk.to || "未入力"} />}
+            {!isTaxiConfirm && <ConfirmRow label="ご依頼内容" value={bk.workDetail} highlight />}
           </div>
 
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, marginBottom: 4, paddingBottom: 4, borderBottom: `2px solid ${C.borderLight}` }}>♿ 介助・車椅子</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.textLight, marginBottom: 4, paddingBottom: 4, borderBottom: `2px solid ${C.borderLight}` }}>{isTaxiConfirm ? "♿ 介助・車椅子" : "♿ 介助"}</div>
             <ConfirmRow label="介助の必要性" value={bk.careReq} />
-            <ConfirmRow label="車椅子" value={bk.wheelchair} />
-            <ConfirmRow label="乗車人数" value={bk.passengers} />
+            {isTaxiConfirm && <ConfirmRow label="車椅子" value={bk.wheelchair} highlight />}
+            {isTaxiConfirm && bk.destAssist && <ConfirmRow label="目的地での付き添い" value={bk.destAssist} />}
+            <ConfirmRow label={isTaxiConfirm ? "乗車人数" : "人数"} value={bk.passengers} />
           </div>
 
           <div style={{ marginBottom: 14 }}>
@@ -1032,186 +1095,341 @@ function ReservationSystem() {
   // --- 予約フォーム ---
   if (step === "form") {
     const sD = slot ? new Date(slot) : null;
+    const isTaxi = bk.serviceType === "介護タクシー";
+    const stepKeys = [
+      ...(durationFromSearch ? [] : ["duration"]),
+      "service",
+      "route",
+      ...(isTaxi ? ["equip"] : []),
+      "user",
+    ];
+    const stepLabels = { duration: "所要時間", service: "ご利用内容", route: "行き先", equip: "車椅子", user: "お客様情報" };
+    const curIdx = Math.min(formStep, stepKeys.length - 1);
+    const curKey = stepKeys[curIdx];
+    const isLastStep = curIdx === stepKeys.length - 1;
+
+    const scrollToFirstError = () => {
+      setTimeout(() => {
+        const el = document.querySelector('[data-error="true"]');
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
+    };
+
+    const goNext = (e) => {
+      e.preventDefault();
+      if (!validateFormStep(curKey)) { scrollToFirstError(); return; }
+      if (isLastStep) {
+        setSubmitted(true);
+        if (validate()) { setRecaptchaToken(null); setStep("confirm"); }
+        else scrollToFirstError();
+      } else {
+        setErrors({});
+        setFormStep(curIdx + 1);
+      }
+    };
+
+    const goBack = () => {
+      setErrors({});
+      if (curIdx === 0) setStep(durationFromSearch ? "search" : "slots");
+      else setFormStep(curIdx - 1);
+    };
+
+    const wpUpdate = (i, v) => { const arr = [...(bk.waypoints || [])]; arr[i] = v; ub("waypoints", arr); };
+    const wpRemove = (i) => ub("waypoints", (bk.waypoints || []).filter((_, j) => j !== i));
+    const wpAdd = () => ub("waypoints", [...(bk.waypoints || []), ""]);
+
+    const bigChoice = (active) => ({
+      width: "100%", textAlign: "left", padding: "16px 14px", marginBottom: 10, cursor: "pointer",
+      borderRadius: 10, border: `2px solid ${active ? C.green : C.borderLight}`,
+      background: active ? C.greenBg : C.white,
+    });
+
     return (
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "14px 14px 40px" }}>
-        <button onClick={() => setStep(durationFromSearch ? "search" : "slots")} style={{ background: "none", border: "none", color: C.green, fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 10, padding: 0 }}>{durationFromSearch ? "← 条件を変える" : "← 空き状況に戻る"}</button>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 14, flexWrap: "wrap" }}>
-          <span style={{ background: C.greenBg, color: C.green, fontWeight: 700, padding: "3px 8px", borderRadius: 10, fontSize: 10 }}>① 日時選択 ✓</span>
-          <span style={{ color: C.border, fontSize: 11 }}>→</span>
-          <span style={{ background: C.orangeBg, color: C.orange, fontWeight: 700, padding: "3px 8px", borderRadius: 10, fontSize: 10 }}>② 詳細入力</span>
-          <span style={{ color: C.border, fontSize: 11 }}>→</span>
-          <span style={{ color: C.textLight, fontSize: 10 }}>③ 内容確認</span>
-          <span style={{ color: C.border, fontSize: 11 }}>→</span>
-          <span style={{ color: C.textLight, fontSize: 10 }}>④ 完了</span>
+        <button onClick={goBack} style={{ background: "none", border: "none", color: C.green, fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 10, padding: 0 }}>
+          {curIdx === 0 ? (durationFromSearch ? "← 条件を変える" : "← 空き状況に戻る") : "← 前に戻る"}
+        </button>
+
+        {/* 進み具合 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, marginBottom: 12, flexWrap: "wrap" }}>
+          {stepKeys.map((k, i) => (
+            <span key={k} style={{
+              fontSize: 10, fontWeight: 700, padding: "3px 7px", borderRadius: 10,
+              background: i < curIdx ? C.greenBg : i === curIdx ? C.orangeBg : "transparent",
+              color: i < curIdx ? C.green : i === curIdx ? C.orange : C.textLight,
+            }}>
+              {i + 1}{stepLabels[k]}{i < curIdx ? " ✓" : ""}
+            </span>
+          ))}
+          <span style={{ fontSize: 10, color: C.textLight, padding: "3px 5px" }}>→ 確認</span>
         </div>
+
+        {/* 選択した日時 */}
         <div style={{ ...card, padding: "12px 16px", background: C.greenBg, borderLeft: `4px solid ${C.green}` }}>
           <div style={{ fontSize: 10, color: C.textLight, marginBottom: 2 }}>選択した日時</div>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>📅 {sD ? sD.toLocaleString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" }) : ""}</div>
-        </div>
-        <form onSubmit={goConfirm}>
-          <div style={card}>
-            <ST icon="⏱" title="ご利用時間" />
-            {durationFromSearch ? (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: C.greenBg, borderRadius: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: C.green }}>{formatDuration(durationMinutes)}</span>
-                <button type="button" onClick={() => setStep("search")} style={{ background: "none", border: "none", color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>← 条件を変えて再検索</button>
-              </div>
-            ) : (
-              <FF label="ご利用予定時間" required error={errors.duration}>
-                <select value={durationMinutes || ""} onChange={e => { setDurationMinutes(Number(e.target.value)); setErrors(p => ({ ...p, duration: "" })); }} style={{ ...inp, borderColor: errors.duration ? C.red : C.border }}>
-                  <option value="" disabled>選択してください</option>
-                  {Object.entries(durMap).map(([label, mins]) => <option key={label} value={mins}>{label}</option>)}
-                </select>
-              </FF>
-            )}
-          </div>
-          <div style={card}>
-            <ST icon="👤" title="お客様情報" />
-            <FF label="利用者のお名前" required error={errors.name}>
-              <input type="text" placeholder="山田 太郎" value={bk.name} onChange={e => { ub("name", e.target.value); setErrors(p => ({ ...p, name: "" })); }} style={{ ...inp, borderColor: errors.name ? C.red : C.border }} />
-            </FF>
-            <FF label="電話番号" required error={errors.tel}>
-              <input type="tel" placeholder="090-1234-5678" value={bk.tel} onChange={e => { ub("tel", e.target.value); setErrors(p => ({ ...p, tel: "" })); }} style={{ ...inp, borderColor: errors.tel ? C.red : C.border }} />
-            </FF>
-            <FF label="メールアドレス">
-              <div style={{ fontSize: 12, color: C.blue, marginBottom: 6, padding: "6px 8px", background: C.blueBg, borderRadius: 6 }}>
-                📧 入力いただくと、予約完了後に確認メールをお送りします（任意）
-              </div>
-              <input type="email" placeholder="example@email.com" value={bk.email} onChange={e => ub("email", e.target.value)} style={inp} />
-            </FF>
-            {/* ご利用に際しての留意事項 */}
-            <FF label="ご利用者様に関するご利用に際しての留意事項">
-              <textarea
-                placeholder="例：酸素ボンベ使用中、車椅子での乗降に時間がかかる、など"
-                value={bk.careNotes}
-                onChange={e => ub("careNotes", e.target.value)}
-                style={{ ...inp, minHeight: 70, resize: "vertical" }}
-              />
-            </FF>
-          </div>
-
-          {/* 予約者情報 */}
-          <div style={card}>
-            <ST icon="🧑‍💼" title="予約者情報" />
-            <FF label="予約者の区分" required>
-              <RG
-                options={[
-                  { value: "本人", label: "本人" },
-                  { value: "家族・代理人", label: "家族・代理人" },
-                  { value: "ソーシャルワーカー", label: "ソーシャルワーカー" },
-                  { value: "ケアマネジャー", label: "ケアマネジャー" },
-                  { value: "施設担当者", label: "施設担当者" },
-                  { value: "ふじ介護タクシー", label: "ふじ介護タクシー" },
-                  { value: "その他（本人以外）", label: "その他（本人以外）" },
-                ]}
-                value={bk.bookerType}
-                onChange={v => { ub("bookerType", v); setErrors(p => ({ ...p, bookerName: "" })); }}
-              />
-            </FF>
-            {bookerRequiresName && (
-              <>
-                {!isFujiKaigo && (
-                  <FF label={bookerNameLabel} required error={errors.bookerName}>
-                    <input
-                      type="text"
-                      placeholder={`${bookerNameLabel}を入力`}
-                      value={bk.bookerName}
-                      onChange={e => { ub("bookerName", e.target.value); setErrors(p => ({ ...p, bookerName: "" })); }}
-                      style={{ ...inp, borderColor: errors.bookerName ? C.red : C.border }}
-                    />
-                  </FF>
-                )}
-                <FF label={bookerTelLabel}>
-                  <div style={{ marginBottom: 6 }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.textMid, cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={bk.bookerTelSame}
-                        onChange={e => ub("bookerTelSame", e.target.checked)}
-                        style={{ width: 16, height: 16 }}
-                      />
-                      利用者と同じ電話番号
-                    </label>
-                  </div>
-                  {!bk.bookerTelSame && (
-                    <input
-                      type="tel"
-                      placeholder={isFamilyBooker ? "ご家族の電話番号" : "ご担当者の電話番号"}
-                      value={bk.bookerTel}
-                      onChange={e => ub("bookerTel", e.target.value)}
-                      style={inp}
-                    />
-                  )}
-                </FF>
-                {isFujiKaigo && (
-                  <FF label="家族・病院担当者名">
-                    <input
-                      type="text"
-                      placeholder="家族または病院担当者のお名前"
-                      value={bk.familyHospitalStaffName}
-                      onChange={e => ub("familyHospitalStaffName", e.target.value)}
-                      style={inp}
-                    />
-                  </FF>
-                )}
-              </>
-            )}
-          </div>
-
-          <div style={card}>
-            <ST icon="📍" title="サービス・行程" />
-            <FF label="サービス種別" required><RG options={["介護タクシー", "買い物代行", "生活支援サービス", "安否確認・報告サービス", "その他"]} value={bk.serviceType} onChange={v => ub("serviceType", v)} /></FF>
-            <FF label="お迎え・ご利用場所" required error={errors.from}><textarea placeholder="住所・施設名など" value={bk.from} onChange={e => { ub("from", e.target.value); setErrors(p => ({ ...p, from: "" })); }} style={{ ...inp, minHeight: 56, resize: "vertical", borderColor: errors.from ? C.red : C.border }} /></FF>
-            <FF label="病棟・病室（任意）"><input type="text" placeholder="例：○○病棟 △△号室" value={bk.wardRoom} onChange={e => ub("wardRoom", e.target.value)} style={inp} /></FF>
-            <FF label="目的地"><textarea placeholder="住所・施設名など" value={bk.to} onChange={e => ub("to", e.target.value)} style={{ ...inp, minHeight: 56, resize: "vertical" }} /></FF>
-          </div>
-          <div style={card}>
-            <ST icon="♿" title="介助・車椅子" />
-            <FF label="介助の必要性" required><RG options={[{ value: "車の乗降介助程度", label: "車の乗降介助程度" }, { value: "身体介護等あり", label: "身体介護等あり（＋500円）" }]} value={bk.careReq} onChange={v => ub("careReq", v)} /></FF>
-            <FF label="車椅子" required error={errors.wheelchair}><RG options={[{ value: "利用なし", label: "利用なし" }, { value: "自分の車椅子を使用", label: "自分の車椅子を使用" }, { value: "普通型レンタル", label: "普通型をレンタル（日またぎ＋500円）" }, { value: "リクライニング型レンタル", label: "リクライニング型をレンタル（日またぎ＋700円）" }]} value={bk.wheelchair} onChange={v => { ub("wheelchair", v); setErrors(p => ({ ...p, wheelchair: "" })); }} /></FF>
-            <FF label="乗車人数"><select value={bk.passengers} onChange={e => ub("passengers", e.target.value)} style={inp}>{["1名", "2名（付き添い1名）", "3名（付き添い2名）"].map(p => <option key={p}>{p}</option>)}</select></FF>
-          </div>
-          <div style={card}>
-            <ST icon="💳" title="お支払い・備考" />
-            <FF label="お支払い方法（複数選択可）" required>
-              {["現金", "タクシー券", "銀行振込", "請求書払い（法人）"].map(opt => {
-                const checked = (bk.payments || []).includes(opt);
-                return (
-                  <label key={opt} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, background: checked ? "#ecfdf5" : "#f8fafc", border: `2px solid ${checked ? "#6ee7b7" : "#e2e8f0"}`, borderRadius: 10, cursor: "pointer" }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 4, background: checked ? "#10b981" : "white", border: `2px solid ${checked ? "#10b981" : "#cbd5e1"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {checked && <svg width="12" height="12" viewBox="0 0 20 20" fill="white"><path fillRule="evenodd" d="M16.7 4.2a.75.75 0 01.1 1l-8 10.5a.75.75 0 01-1.1.1l-4.5-4.5a.75.75 0 011-1l3.9 3.9 7.5-9.8a.75.75 0 011-.2z"/></svg>}
-                    </div>
-                    <input type="checkbox" checked={checked} style={{ display: "none" }} onChange={e => {
-                      const cur = bk.payments || [];
-                      ub("payments", e.target.checked ? [...cur, opt] : cur.filter(x => x !== opt));
-                    }} />
-                    <span style={{ fontSize: 14, fontWeight: 600, color: checked ? "#065f46" : "#475569" }}>{opt}</span>
-                  </label>
-                );
-              })}
-            </FF>
-            <FF label="備考・ご要望"><textarea placeholder="何かあればご記入ください" value={bk.note} onChange={e => ub("note", e.target.value)} style={{ ...inp, minHeight: 70, resize: "vertical" }} /></FF>
-          </div>
-
-          {/* キャンセル案内 */}
-          <div style={{ ...card, background: C.cream, borderLeft: `4px solid ${C.orange}`, padding: "12px 14px", marginBottom: 80 }}>
-            <div style={{ fontSize: 13, color: C.textMid, lineHeight: 1.7 }}>
-              📞 <strong>ご予約のキャンセルは電話にて承ります。</strong>
+          {durationMinutes > 0 && sD && (
+            <div style={{ fontSize: 12, color: C.textMid, marginTop: 3 }}>
+              〜 {minutesToTime(sD.getHours() * 60 + sD.getMinutes() + durationMinutes)}（{formatDuration(durationMinutes)}）
             </div>
-          </div>
+          )}
+        </div>
+
+        <form onSubmit={goNext}>
+          {/* 所要時間 */}
+          {curKey === "duration" && (
+            <div style={card}>
+              <ST icon="⏱" title="どのくらいかかりそうですか？" />
+              <div data-error={errors.duration ? "true" : undefined}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+                  {Object.entries(durMap).map(([label, mins]) => {
+                    const active = durationMinutes === mins;
+                    const ng = conflictsFor(mins);
+                    return (
+                      <button key={label} type="button" disabled={ng}
+                        onClick={() => { setDurationMinutes(mins); setErrors(p => ({ ...p, duration: "" })); }}
+                        style={{
+                          padding: "14px 4px", borderRadius: 8, minWidth: 0,
+                          cursor: ng ? "default" : "pointer",
+                          border: `2px solid ${active ? C.green : C.borderLight}`,
+                          background: active ? C.green : ng ? C.borderLight : C.white,
+                          color: active ? "#fff" : ng ? "#bbb" : C.text,
+                          fontSize: 14, fontWeight: active ? 800 : 600,
+                        }}>
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 11, color: C.textLight, marginTop: 8 }}>
+                  おおよそで構いません。灰色は次のご予約と重なるため選べません。
+                </div>
+                {errors.duration && <div style={{ fontSize: 11, color: C.red, marginTop: 6 }}>⚠ {errors.duration}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* ご利用内容 */}
+          {curKey === "service" && (
+            <div style={card}>
+              <ST icon="🚕" title="ご利用内容をお選びください" />
+              <div data-error={errors.serviceType ? "true" : undefined}>
+                <button type="button" onClick={() => { ub("serviceType", "介護タクシー"); setErrors({}); }} style={bigChoice(isTaxi)}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: isTaxi ? C.green : C.text }}>🚕 介護タクシー</div>
+                  <div style={{ fontSize: 11, color: C.textLight, marginTop: 3 }}>通院・退院・外出などの送迎</div>
+                </button>
+                <button type="button" onClick={() => { ub("serviceType", "生活支援"); ub("wheelchair", "利用なし"); ub("destAssist", ""); setErrors({}); }} style={bigChoice(bk.serviceType === "生活支援")}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: bk.serviceType === "生活支援" ? C.green : C.text }}>🛍 生活支援</div>
+                  <div style={{ fontSize: 11, color: C.textLight, marginTop: 3 }}>買い物代行・安否確認・その他のお手伝い</div>
+                </button>
+                {errors.serviceType && <div style={{ fontSize: 11, color: C.red, marginTop: 3 }}>⚠ {errors.serviceType}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* 行き先 */}
+          {curKey === "route" && (
+            <div style={card}>
+              <ST icon="📍" title={isTaxi ? "出発地と目的地" : "作業場所とご依頼内容"} />
+              <FF label={isTaxi ? "出発地" : "作業場所"} required error={errors.from}>
+                <textarea placeholder="住所・施設名など" value={bk.from} onChange={e => { ub("from", e.target.value); setErrors(p => ({ ...p, from: "" })); }} style={{ ...inp, minHeight: 56, resize: "vertical", borderColor: errors.from ? C.red : C.border }} />
+              </FF>
+              <FF label="病棟・病室など（任意）">
+                <input type="text" placeholder="例：○○病棟 △△号室" value={bk.wardRoom} onChange={e => ub("wardRoom", e.target.value)} style={inp} />
+              </FF>
+
+              {isTaxi && (
+                <>
+                  <FF label="経由地（任意）">
+                    {(bk.waypoints || []).map((w, i) => (
+                      <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                        <input type="text" placeholder={`経由地${i + 1}（例：○○薬局）`} value={w} onChange={e => wpUpdate(i, e.target.value)} style={inp} />
+                        <button type="button" onClick={() => wpRemove(i)} style={{ flexShrink: 0, padding: "0 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textMid, fontSize: 12, cursor: "pointer" }}>削除</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={wpAdd} style={{ width: "100%", padding: "10px", borderRadius: 8, border: `1.5px dashed ${C.border}`, background: C.cream, color: C.textMid, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋ 経由地を追加する</button>
+                    <div style={{ fontSize: 10, color: C.textLight, marginTop: 4 }}>途中で立ち寄る場所があれば追加してください</div>
+                  </FF>
+                  <FF label="目的地" required error={errors.to}>
+                    <textarea placeholder="住所・施設名など" value={bk.to} onChange={e => { ub("to", e.target.value); setErrors(p => ({ ...p, to: "" })); }} style={{ ...inp, minHeight: 56, resize: "vertical", borderColor: errors.to ? C.red : C.border }} />
+                  </FF>
+                </>
+              )}
+
+              {!isTaxi && (
+                <FF label="ご依頼内容" required error={errors.workDetail}>
+                  <textarea placeholder="例：スーパーで食材の買い物代行、安否確認の訪問 など" value={bk.workDetail} onChange={e => { ub("workDetail", e.target.value); setErrors(p => ({ ...p, workDetail: "" })); }} style={{ ...inp, minHeight: 70, resize: "vertical", borderColor: errors.workDetail ? C.red : C.border }} />
+                </FF>
+              )}
+
+              <div style={{ marginTop: 12 }}><PriceLink /></div>
+            </div>
+          )}
+
+          {/* 車椅子・介助（介護タクシーのみ） */}
+          {curKey === "equip" && (
+            <div style={card}>
+              <ST icon="♿" title="車椅子・介助について" />
+              <FF label="車椅子" required error={errors.wheelchair}>
+                <RG
+                  options={[
+                    { value: "利用なし", label: "利用なし" },
+                    { value: "自分の車椅子を使用", label: "自分の車椅子を使用（持参）" },
+                    { value: "普通型レンタル", label: "普通型をレンタル（日またぎ＋500円）" },
+                    { value: "リクライニング型レンタル", label: "リクライニング型をレンタル（日またぎ＋700円）" },
+                  ]}
+                  value={bk.wheelchair}
+                  onChange={v => { ub("wheelchair", v); setErrors(p => ({ ...p, wheelchair: "" })); }}
+                />
+              </FF>
+              <FF label="介助の必要性" required>
+                <RG options={[{ value: "車の乗降介助程度", label: "車の乗降介助程度" }, { value: "身体介護等あり", label: "身体介護等あり（＋500円）" }]} value={bk.careReq} onChange={v => ub("careReq", v)} />
+              </FF>
+            </div>
+          )}
+
+          {/* お客様情報（ご利用者・ご予約者・ご連絡先・お支払い） */}
+          {curKey === "user" && (
+            <>
+              <div style={card}>
+                <ST icon="👤" title="ご利用者について" />
+                <FF label="ご利用者のお名前" required error={errors.name}>
+                  <input type="text" placeholder="山田 太郎" value={bk.name} onChange={e => { ub("name", e.target.value); setErrors(p => ({ ...p, name: "" })); }} style={{ ...inp, borderColor: errors.name ? C.red : C.border }} />
+                </FF>
+                <FF label="ご利用に際しての注意事項（任意）">
+                  <textarea placeholder="例：酸素ボンベ使用中、車椅子での乗降に時間がかかる、など" value={bk.careNotes} onChange={e => ub("careNotes", e.target.value)} style={{ ...inp, minHeight: 70, resize: "vertical" }} />
+                </FF>
+                <FF label="付き添いの人数">
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["1名", "2名（付き添い1名）", "3名（付き添い2名）"].map((p, i) => {
+                      const active = bk.passengers === p;
+                      return (
+                        <button key={p} type="button" onClick={() => ub("passengers", p)} style={{ flex: 1, minWidth: 0, padding: "12px 4px", borderRadius: 8, cursor: "pointer", border: `2px solid ${active ? C.green : C.borderLight}`, background: active ? C.greenBg : C.cream }}>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: active ? C.green : C.text }}>{i === 0 ? "本人のみ" : `＋${i}名`}</div>
+                          <div style={{ fontSize: 10, color: C.textLight, marginTop: 2 }}>{i === 0 ? "1名" : `計${i + 1}名`}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: 10, color: C.textLight, marginTop: 4 }}>ご利用者を含めた乗車人数です</div>
+                </FF>
+                {isTaxi && (
+                  <FF label="目的地での付き添い・介助" required error={errors.destAssist}>
+                    <RG
+                      options={[
+                        { value: "不要（送迎のみ）", label: "不要（送迎のみ）" },
+                        { value: "必要（院内・施設内の付き添い）", label: "必要（院内・施設内の付き添い）" },
+                      ]}
+                      value={bk.destAssist}
+                      onChange={v => { ub("destAssist", v); setErrors(p => ({ ...p, destAssist: "" })); }}
+                    />
+                    <div style={{ fontSize: 10, color: C.textLight, marginTop: 4 }}>受付や院内の移動をお手伝いするかどうかです</div>
+                  </FF>
+                )}
+              </div>
+
+              <div style={card}>
+                <ST icon="🧑‍💼" title="ご予約者について" />
+                <FF label="ご予約者の区分" required>
+                  <RG
+                    options={[
+                      { value: "本人", label: "本人" },
+                      { value: "家族・代理人", label: "家族・代理人" },
+                      { value: "ソーシャルワーカー", label: "ソーシャルワーカー" },
+                      { value: "ケアマネジャー", label: "ケアマネジャー" },
+                      { value: "施設担当者", label: "施設担当者" },
+                      { value: "ふじ介護タクシー", label: "ふじ介護タクシー" },
+                      { value: "その他（本人以外）", label: "その他（本人以外）" },
+                    ]}
+                    value={bk.bookerType}
+                    onChange={v => { ub("bookerType", v); setErrors(p => ({ ...p, bookerName: "" })); }}
+                  />
+                </FF>
+                {bookerRequiresName && (
+                  <>
+                    {!isFujiKaigo && (
+                      <FF label={bookerNameLabel} required error={errors.bookerName}>
+                        <input type="text" placeholder={`${bookerNameLabel}を入力`} value={bk.bookerName} onChange={e => { ub("bookerName", e.target.value); setErrors(p => ({ ...p, bookerName: "" })); }} style={{ ...inp, borderColor: errors.bookerName ? C.red : C.border }} />
+                      </FF>
+                    )}
+                    <FF label={bookerTelLabel}>
+                      <div style={{ marginBottom: 6 }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.textMid, cursor: "pointer" }}>
+                          <input type="checkbox" checked={bk.bookerTelSame} onChange={e => ub("bookerTelSame", e.target.checked)} style={{ width: 16, height: 16 }} />
+                          利用者と同じ電話番号
+                        </label>
+                      </div>
+                      {!bk.bookerTelSame && (
+                        <input type="tel" placeholder={isFamilyBooker ? "ご家族の電話番号" : "ご担当者の電話番号"} value={bk.bookerTel} onChange={e => ub("bookerTel", e.target.value)} style={inp} />
+                      )}
+                    </FF>
+                    {isFujiKaigo && (
+                      <FF label="家族・病院担当者名">
+                        <input type="text" placeholder="家族または病院担当者のお名前" value={bk.familyHospitalStaffName} onChange={e => ub("familyHospitalStaffName", e.target.value)} style={inp} />
+                      </FF>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div style={card}>
+                <ST icon="📞" title="ご連絡先" />
+                <FF label="電話番号" required error={errors.tel}>
+                  <input type="tel" placeholder="090-1234-5678" value={bk.tel} onChange={e => { ub("tel", e.target.value); setErrors(p => ({ ...p, tel: "" })); }} style={{ ...inp, borderColor: errors.tel ? C.red : C.border }} />
+                </FF>
+                <FF label="メールアドレス">
+                  <div style={{ fontSize: 12, color: C.blue, marginBottom: 6, padding: "6px 8px", background: C.blueBg, borderRadius: 6 }}>
+                    📧 入力いただくと、予約完了後に確認メールをお送りします（任意）
+                  </div>
+                  <input type="email" placeholder="example@email.com" value={bk.email} onChange={e => ub("email", e.target.value)} style={inp} />
+                </FF>
+              </div>
+
+              <div style={card}>
+                <ST icon="💳" title="お支払い・備考" />
+                <FF label="お支払い方法（複数選択可）" required error={errors.payments}>
+                  {["現金", "タクシー券", "銀行振込", "請求書払い（法人）"].map(opt => {
+                    const checked = (bk.payments || []).includes(opt);
+                    return (
+                      <label key={opt} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, background: checked ? "#ecfdf5" : "#f8fafc", border: `2px solid ${checked ? "#6ee7b7" : "#e2e8f0"}`, borderRadius: 10, cursor: "pointer" }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 4, background: checked ? "#10b981" : "white", border: `2px solid ${checked ? "#10b981" : "#cbd5e1"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {checked && <svg width="12" height="12" viewBox="0 0 20 20" fill="white"><path fillRule="evenodd" d="M16.7 4.2a.75.75 0 01.1 1l-8 10.5a.75.75 0 01-1.1.1l-4.5-4.5a.75.75 0 011-1l3.9 3.9 7.5-9.8a.75.75 0 011-.2z"/></svg>}
+                        </div>
+                        <input type="checkbox" checked={checked} style={{ display: "none" }} onChange={e => {
+                          const cur = bk.payments || [];
+                          ub("payments", e.target.checked ? [...cur, opt] : cur.filter(x => x !== opt));
+                          setErrors(p => ({ ...p, payments: "" }));
+                        }} />
+                        <span style={{ fontSize: 14, fontWeight: 600, color: checked ? "#065f46" : "#475569" }}>{opt}</span>
+                      </label>
+                    );
+                  })}
+                </FF>
+                <FF label="備考・ご要望（任意）">
+                  <textarea placeholder="何かあればご記入ください" value={bk.note} onChange={e => ub("note", e.target.value)} style={{ ...inp, minHeight: 70, resize: "vertical" }} />
+                </FF>
+              </div>
+
+              <div style={{ ...card, background: C.cream, borderLeft: `4px solid ${C.orange}`, padding: "12px 14px" }}>
+                <div style={{ fontSize: 13, color: C.textMid, lineHeight: 1.7 }}>
+                  📞 <strong>ご予約のキャンセルは電話にて承ります。</strong>
+                </div>
+              </div>
+
+              <PriceLink />
+            </>
+          )}
 
           <div className="resv-sticky-footer">
-            <button type="submit" style={bOrange}>内容を確認する →</button>
+            <button type="submit" style={bOrange}>{isLastStep ? "内容を確認する →" : "次へ進む →"}</button>
           </div>
 
-          {submitted && Object.keys(errors).length > 0 && (
+          {Object.keys(errors).length > 0 && (
             <div style={{ ...card, background: C.redBg, borderColor: C.red + "40", borderLeft: `4px solid ${C.red}`, padding: "12px 14px", marginTop: 10 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 4 }}>⚠ 入力内容をご確認ください</div>
               {Object.values(errors).map((e, i) => <div key={i} style={{ fontSize: 12, color: C.red }}>・{e}</div>)}
             </div>
           )}
-
-          <div style={{ marginTop: 14 }}><PriceLink /></div>
         </form>
         <Footer />
       </div>
@@ -1527,7 +1745,7 @@ function ReservationSystem() {
                       }
                       return (
                         <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, padding: 0, textAlign: "center" }}>
-                          <button className="resv-slot-btn" onClick={() => { setSlot(sd.toISOString()); setDurationFromSearch(false); setDurationMinutes(0); setStep("form"); }} aria-label={`${d.getMonth()+1}月${d.getDate()}日 ${t.h}:${t.m.toString().padStart(2, "0")} の予約に進む`}>
+                          <button className="resv-slot-btn" onClick={() => { setSlot(sd.toISOString()); setDurationFromSearch(false); setDurationMinutes(0); setFormStep(0); setStep("form"); }} aria-label={`${d.getMonth()+1}月${d.getDate()}日 ${t.h}:${t.m.toString().padStart(2, "0")} の予約に進む`}>
                             ○
                           </button>
                         </td>
