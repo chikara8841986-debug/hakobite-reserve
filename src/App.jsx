@@ -383,9 +383,74 @@ function PriceCalculator() {
 // ============================================================
 // 3. 予約システム
 // ============================================================
+// ============================================================
+// 入力履歴（この端末のブラウザにだけ保存。サーバーには送らない）
+// ============================================================
+const HISTORY_KEY = "hakobite_input_history_v1";
+const HISTORY_MAX = 12;
+
+function loadHistory() {
+  try {
+    const o = JSON.parse(localStorage.getItem(HISTORY_KEY) || "{}");
+    return {
+      places: Array.isArray(o.places) ? o.places : [],
+      names: Array.isArray(o.names) ? o.names : [],
+    };
+  } catch {
+    return { places: [], names: [] };
+  }
+}
+
+function saveHistory(h) {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch {}
+}
+
+// 新しく使った値を先頭に積み、重複を除いて上限まで残す
+function addToHistory(key, values) {
+  const h = loadHistory();
+  const incoming = (values || []).map(v => (v || "").trim()).filter(Boolean);
+  const merged = [...incoming, ...(h[key] || [])];
+  const uniq = [];
+  for (const v of merged) if (!uniq.includes(v)) uniq.push(v);
+  h[key] = uniq.slice(0, HISTORY_MAX);
+  saveHistory(h);
+  return h;
+}
+
+function removeFromHistory(key, value) {
+  const h = loadHistory();
+  h[key] = (h[key] || []).filter(v => v !== value);
+  saveHistory(h);
+  return h;
+}
+
+function HistoryChips({ items, onPick, onRemove, label = "前に入力したもの" }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 10, color: C.textLight, marginBottom: 4 }}>{label}（タップで入力）</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {items.map(v => (
+          <span key={v} style={{ display: "inline-flex", alignItems: "center", background: C.greenBg, border: `1px solid ${C.green}40`, borderRadius: 99, overflow: "hidden" }}>
+            <button type="button" onClick={() => onPick(v)}
+              style={{ background: "none", border: "none", color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "8px 4px 8px 12px", maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {v}
+            </button>
+            <button type="button" onClick={() => onRemove(v)} aria-label={`${v} を履歴から消す`}
+              style={{ background: "none", border: "none", color: C.textLight, fontSize: 14, cursor: "pointer", lineHeight: 1, padding: "8px 10px 8px 4px" }}>
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ReservationSystem() {
   const [step, setStep] = useState(getInitialReserveStep);
   const [formStep, setFormStep] = useState(0);
+  const [history, setHistory] = useState(loadHistory);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState("");
@@ -821,6 +886,9 @@ function ReservationSystem() {
       });
       if (r.ok) {
         setSubmitProgress("✓ 完了！");
+        // 次回の入力を楽にするため、この端末にだけ入力履歴を残す
+        addToHistory("names", [bk.name]);
+        setHistory(addToHistory("places", [bk.from, ...wpList, bk.to]));
         try { localStorage.removeItem(DRAFT_KEY); } catch {}
         setDraftAvailable(false);
         await new Promise(res => setTimeout(res, 400));
@@ -1100,13 +1168,23 @@ function ReservationSystem() {
       ...(durationFromSearch ? [] : ["duration"]),
       "service",
       "route",
-      ...(isTaxi ? ["equip"] : []),
+      ...(isTaxi ? ["equip", "care"] : []),
       "user",
     ];
-    const stepLabels = { duration: "所要時間", service: "ご利用内容", route: "行き先", equip: "車椅子", user: "お客様情報" };
+    const stepLabels = { duration: "所要時間", service: "ご利用内容", route: "行き先", equip: "車椅子", care: "介助", user: "お客様情報" };
+    // 1つ選ぶだけのステップは、タップしたらそのまま次へ進む
+    const autoAdvanceKeys = ["duration", "service", "equip", "care"];
     const curIdx = Math.min(formStep, stepKeys.length - 1);
     const curKey = stepKeys[curIdx];
     const isLastStep = curIdx === stepKeys.length - 1;
+    const isAutoStep = autoAdvanceKeys.includes(curKey);
+    // 選択済みの値（戻ってきたときに「次へ」を出すかの判定に使う）
+    const autoStepValue = curKey === "duration" ? durationMinutes
+      : curKey === "service" ? bk.serviceType
+      : curKey === "equip" ? bk.wheelchair
+      : curKey === "care" ? bk.careReq : "";
+    // タップ直後に選択が見えるよう、少しだけ待ってから次へ
+    const autoNext = () => setTimeout(() => { setErrors({}); setFormStep(i => i + 1); }, 220);
 
     const scrollToFirstError = () => {
       setTimeout(() => {
@@ -1187,7 +1265,7 @@ function ReservationSystem() {
                     const ng = conflictsFor(mins);
                     return (
                       <button key={label} type="button" disabled={ng}
-                        onClick={() => { setDurationMinutes(mins); setErrors(p => ({ ...p, duration: "" })); }}
+                        onClick={() => { setDurationMinutes(mins); setErrors(p => ({ ...p, duration: "" })); autoNext(); }}
                         style={{
                           padding: "14px 4px", borderRadius: 8, minWidth: 0,
                           cursor: ng ? "default" : "pointer",
@@ -1214,11 +1292,11 @@ function ReservationSystem() {
             <div style={card}>
               <ST icon="🚕" title="ご利用内容をお選びください" />
               <div data-error={errors.serviceType ? "true" : undefined}>
-                <button type="button" onClick={() => { ub("serviceType", "介護タクシー"); setErrors({}); }} style={bigChoice(isTaxi)}>
+                <button type="button" onClick={() => { ub("serviceType", "介護タクシー"); setErrors({}); autoNext(); }} style={bigChoice(isTaxi)}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: isTaxi ? C.green : C.text }}>🚕 介護タクシー</div>
                   <div style={{ fontSize: 11, color: C.textLight, marginTop: 3 }}>通院・退院・外出などの送迎</div>
                 </button>
-                <button type="button" onClick={() => { ub("serviceType", "生活支援"); ub("wheelchair", "利用なし"); ub("destAssist", ""); setErrors({}); }} style={bigChoice(bk.serviceType === "生活支援")}>
+                <button type="button" onClick={() => { ub("serviceType", "生活支援"); ub("wheelchair", "利用なし"); ub("destAssist", ""); setErrors({}); autoNext(); }} style={bigChoice(bk.serviceType === "生活支援")}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: bk.serviceType === "生活支援" ? C.green : C.text }}>🛍 生活支援</div>
                   <div style={{ fontSize: 11, color: C.textLight, marginTop: 3 }}>買い物代行・安否確認・その他のお手伝い</div>
                 </button>
@@ -1232,6 +1310,7 @@ function ReservationSystem() {
             <div style={card}>
               <ST icon="📍" title={isTaxi ? "出発地と目的地" : "作業場所とご依頼内容"} />
               <FF label={isTaxi ? "出発地" : "作業場所"} required error={errors.from}>
+                <HistoryChips items={history.places} onPick={v => { ub("from", v); setErrors(p => ({ ...p, from: "" })); }} onRemove={v => setHistory(removeFromHistory("places", v))} />
                 <textarea placeholder="住所・施設名など" value={bk.from} onChange={e => { ub("from", e.target.value); setErrors(p => ({ ...p, from: "" })); }} style={{ ...inp, minHeight: 56, resize: "vertical", borderColor: errors.from ? C.red : C.border }} />
               </FF>
               <FF label="病棟・病室など（任意）">
@@ -1247,10 +1326,14 @@ function ReservationSystem() {
                         <button type="button" onClick={() => wpRemove(i)} style={{ flexShrink: 0, padding: "0 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.textMid, fontSize: 12, cursor: "pointer" }}>削除</button>
                       </div>
                     ))}
+                    {(bk.waypoints || []).length > 0 && (
+                      <HistoryChips items={history.places} label="最後の経由地に入れる" onPick={v => { const arr = [...(bk.waypoints || [])]; arr[arr.length - 1] = v; ub("waypoints", arr); }} onRemove={v => setHistory(removeFromHistory("places", v))} />
+                    )}
                     <button type="button" onClick={wpAdd} style={{ width: "100%", padding: "10px", borderRadius: 8, border: `1.5px dashed ${C.border}`, background: C.cream, color: C.textMid, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋ 経由地を追加する</button>
                     <div style={{ fontSize: 10, color: C.textLight, marginTop: 4 }}>途中で立ち寄る場所があれば追加してください</div>
                   </FF>
                   <FF label="目的地" required error={errors.to}>
+                    <HistoryChips items={history.places} onPick={v => { ub("to", v); setErrors(p => ({ ...p, to: "" })); }} onRemove={v => setHistory(removeFromHistory("places", v))} />
                     <textarea placeholder="住所・施設名など" value={bk.to} onChange={e => { ub("to", e.target.value); setErrors(p => ({ ...p, to: "" })); }} style={{ ...inp, minHeight: 56, resize: "vertical", borderColor: errors.to ? C.red : C.border }} />
                   </FF>
                 </>
@@ -1266,11 +1349,11 @@ function ReservationSystem() {
             </div>
           )}
 
-          {/* 車椅子・介助（介護タクシーのみ） */}
+          {/* 車椅子（介護タクシーのみ・タップで次へ） */}
           {curKey === "equip" && (
             <div style={card}>
-              <ST icon="♿" title="車椅子・介助について" />
-              <FF label="車椅子" required error={errors.wheelchair}>
+              <ST icon="♿" title="車椅子は必要ですか？" />
+              <div data-error={errors.wheelchair ? "true" : undefined}>
                 <RG
                   options={[
                     { value: "利用なし", label: "利用なし" },
@@ -1279,12 +1362,25 @@ function ReservationSystem() {
                     { value: "リクライニング型レンタル", label: "リクライニング型をレンタル（日またぎ＋700円）" },
                   ]}
                   value={bk.wheelchair}
-                  onChange={v => { ub("wheelchair", v); setErrors(p => ({ ...p, wheelchair: "" })); }}
+                  onChange={v => { ub("wheelchair", v); setErrors(p => ({ ...p, wheelchair: "" })); autoNext(); }}
                 />
-              </FF>
-              <FF label="介助の必要性" required>
-                <RG options={[{ value: "車の乗降介助程度", label: "車の乗降介助程度" }, { value: "身体介護等あり", label: "身体介護等あり（＋500円）" }]} value={bk.careReq} onChange={v => ub("careReq", v)} />
-              </FF>
+                {errors.wheelchair && <div style={{ fontSize: 11, color: C.red, marginTop: 6 }}>⚠ {errors.wheelchair}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* 介助の必要性（介護タクシーのみ・タップで次へ） */}
+          {curKey === "care" && (
+            <div style={card}>
+              <ST icon="🤝" title="介助はどの程度必要ですか？" />
+              <RG
+                options={[
+                  { value: "車の乗降介助程度", label: "車の乗降介助程度" },
+                  { value: "身体介護等あり", label: "身体介護等あり（＋500円）" },
+                ]}
+                value={bk.careReq}
+                onChange={v => { ub("careReq", v); autoNext(); }}
+              />
             </div>
           )}
 
@@ -1294,6 +1390,7 @@ function ReservationSystem() {
               <div style={card}>
                 <ST icon="👤" title="ご利用者について" />
                 <FF label="ご利用者のお名前" required error={errors.name}>
+                  <HistoryChips items={history.names} onPick={v => { ub("name", v); setErrors(p => ({ ...p, name: "" })); }} onRemove={v => setHistory(removeFromHistory("names", v))} />
                   <input type="text" placeholder="山田 太郎" value={bk.name} onChange={e => { ub("name", e.target.value); setErrors(p => ({ ...p, name: "" })); }} style={{ ...inp, borderColor: errors.name ? C.red : C.border }} />
                 </FF>
                 <FF label="ご利用に際しての注意事項（任意）">
@@ -1420,9 +1517,12 @@ function ReservationSystem() {
             </>
           )}
 
-          <div className="resv-sticky-footer">
-            <button type="submit" style={bOrange}>{isLastStep ? "内容を確認する →" : "次へ進む →"}</button>
-          </div>
+          {/* タップで進むステップでは、選び直しに戻ったときだけ「次へ」を出す */}
+          {(!isAutoStep || autoStepValue) && (
+            <div className="resv-sticky-footer">
+              <button type="submit" style={bOrange}>{isLastStep ? "内容を確認する →" : "次へ進む →"}</button>
+            </div>
+          )}
 
           {Object.keys(errors).length > 0 && (
             <div style={{ ...card, background: C.redBg, borderColor: C.red + "40", borderLeft: `4px solid ${C.red}`, padding: "12px 14px", marginTop: 10 }}>
