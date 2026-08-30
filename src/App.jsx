@@ -384,65 +384,115 @@ function PriceCalculator() {
 // 3. 予約システム
 // ============================================================
 // ============================================================
-// 入力履歴（この端末のブラウザにだけ保存。サーバーには送らない）
+// 入力履歴とお気に入り（この端末のブラウザにだけ保存。サーバーには送らない）
 // ============================================================
 const HISTORY_KEY = "hakobite_input_history_v1";
-const HISTORY_MAX = 12;
+const HISTORY_MAX = 12;  // 自動で残る履歴の上限
+const FAV_MAX = 30;      // お気に入りの上限（履歴の上限では消えない）
+
+const favKeyOf = (key) => (key === "places" ? "favPlaces" : "favNames");
 
 function loadHistory() {
+  const asList = (v) => (Array.isArray(v) ? v.filter(x => typeof x === "string" && x.trim()) : []);
   try {
     const o = JSON.parse(localStorage.getItem(HISTORY_KEY) || "{}");
     return {
-      places: Array.isArray(o.places) ? o.places : [],
-      names: Array.isArray(o.names) ? o.names : [],
+      places: asList(o.places),
+      names: asList(o.names),
+      favPlaces: asList(o.favPlaces),
+      favNames: asList(o.favNames),
     };
   } catch {
-    return { places: [], names: [] };
+    return { places: [], names: [], favPlaces: [], favNames: [] };
   }
 }
 
 function saveHistory(h) {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch {}
+  return h;
 }
 
 // 新しく使った値を先頭に積み、重複を除いて上限まで残す
 function addToHistory(key, values) {
   const h = loadHistory();
   const incoming = (values || []).map(v => (v || "").trim()).filter(Boolean);
-  const merged = [...incoming, ...(h[key] || [])];
   const uniq = [];
-  for (const v of merged) if (!uniq.includes(v)) uniq.push(v);
+  for (const v of [...incoming, ...h[key]]) if (!uniq.includes(v)) uniq.push(v);
   h[key] = uniq.slice(0, HISTORY_MAX);
-  saveHistory(h);
-  return h;
+  return saveHistory(h);
+}
+
+// ★の付け外し。お気に入りは履歴の上限で消えない
+function toggleFavorite(key, value) {
+  const h = loadHistory();
+  const fk = favKeyOf(key);
+  const v = (value || "").trim();
+  if (!v) return h;
+  if (h[fk].includes(v)) {
+    h[fk] = h[fk].filter(x => x !== v);
+    // ★を外しても候補からは消えないよう、履歴側に戻す
+    if (!h[key].includes(v)) h[key] = [v, ...h[key]].slice(0, HISTORY_MAX);
+  } else {
+    h[fk] = [v, ...h[fk].filter(x => x !== v)].slice(0, FAV_MAX);
+  }
+  return saveHistory(h);
 }
 
 function removeFromHistory(key, value) {
   const h = loadHistory();
-  h[key] = (h[key] || []).filter(v => v !== value);
-  saveHistory(h);
-  return h;
+  h[key] = h[key].filter(v => v !== value);
+  h[favKeyOf(key)] = h[favKeyOf(key)].filter(v => v !== value);
+  return saveHistory(h);
 }
 
-function HistoryChips({ items, onPick, onRemove, label = "前に入力したもの" }) {
-  if (!items || items.length === 0) return null;
+function HistoryChips({ historyKey, history, setHistory, onPick, currentValue, label = "よく使う候補・前に入力したもの" }) {
+  const favs = history[favKeyOf(historyKey)] || [];
+  const rest = (history[historyKey] || []).filter(v => !favs.includes(v));
+  const items = [...favs, ...rest];
+  const trimmed = (currentValue || "").trim();
+  const canAddFav = trimmed.length > 0 && !favs.includes(trimmed);
+  if (items.length === 0 && !canAddFav) return null;
+
   return (
     <div style={{ marginBottom: 8 }}>
-      <div style={{ fontSize: 10, color: C.textLight, marginBottom: 4 }}>{label}（タップで入力）</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {items.map(v => (
-          <span key={v} style={{ display: "inline-flex", alignItems: "center", background: C.greenBg, border: `1px solid ${C.green}40`, borderRadius: 99, overflow: "hidden" }}>
-            <button type="button" onClick={() => onPick(v)}
-              style={{ background: "none", border: "none", color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "8px 4px 8px 12px", maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {v}
-            </button>
-            <button type="button" onClick={() => onRemove(v)} aria-label={`${v} を履歴から消す`}
-              style={{ background: "none", border: "none", color: C.textLight, fontSize: 14, cursor: "pointer", lineHeight: 1, padding: "8px 10px 8px 4px" }}>
-              ×
-            </button>
-          </span>
-        ))}
-      </div>
+      {items.length > 0 && (
+        <>
+          <div style={{ fontSize: 10, color: C.textLight, marginBottom: 4 }}>{label}（名前をタップで入力／★でお気に入り）</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {items.map(v => {
+              const isFav = favs.includes(v);
+              return (
+                <span key={v} style={{
+                  display: "inline-flex", alignItems: "center", borderRadius: 99, overflow: "hidden",
+                  background: isFav ? C.orangeBg : C.greenBg,
+                  border: `1px solid ${isFav ? C.orange : C.green}40`,
+                }}>
+                  <button type="button" onClick={() => setHistory(toggleFavorite(historyKey, v))}
+                    aria-label={isFav ? `${v} のお気に入りを外す` : `${v} をお気に入りに登録`}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "8px 2px 8px 10px", color: isFav ? C.orange : "#c9c0b4" }}>
+                    {isFav ? "★" : "☆"}
+                  </button>
+                  <button type="button" onClick={() => onPick(v)}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, padding: "8px 4px", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isFav ? C.orange : C.green }}>
+                    {v}
+                  </button>
+                  <button type="button" onClick={() => setHistory(removeFromHistory(historyKey, v))}
+                    aria-label={`${v} を候補から消す`}
+                    style={{ background: "none", border: "none", color: C.textLight, fontSize: 14, cursor: "pointer", lineHeight: 1, padding: "8px 10px 8px 4px" }}>
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {canAddFav && (
+        <button type="button" onClick={() => setHistory(toggleFavorite(historyKey, trimmed))}
+          style={{ marginTop: items.length > 0 ? 6 : 0, background: "none", border: "none", color: C.orange, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "4px 0", textDecoration: "underline" }}>
+          ☆ 今の入力「{trimmed.length > 14 ? trimmed.slice(0, 14) + "…" : trimmed}」をお気に入りに登録
+        </button>
+      )}
     </div>
   );
 }
@@ -1310,7 +1360,7 @@ function ReservationSystem() {
             <div style={card}>
               <ST icon="📍" title={isTaxi ? "出発地と目的地" : "作業場所とご依頼内容"} />
               <FF label={isTaxi ? "出発地" : "作業場所"} required error={errors.from}>
-                <HistoryChips items={history.places} onPick={v => { ub("from", v); setErrors(p => ({ ...p, from: "" })); }} onRemove={v => setHistory(removeFromHistory("places", v))} />
+                <HistoryChips historyKey="places" history={history} setHistory={setHistory} currentValue={bk.from} label={isTaxi ? "よく使う出発地・前に入力したもの" : "よく使う場所・前に入力したもの"} onPick={v => { ub("from", v); setErrors(p => ({ ...p, from: "" })); }} />
                 <textarea placeholder="住所・施設名など" value={bk.from} onChange={e => { ub("from", e.target.value); setErrors(p => ({ ...p, from: "" })); }} style={{ ...inp, minHeight: 56, resize: "vertical", borderColor: errors.from ? C.red : C.border }} />
               </FF>
               <FF label="病棟・病室など（任意）">
@@ -1327,13 +1377,13 @@ function ReservationSystem() {
                       </div>
                     ))}
                     {(bk.waypoints || []).length > 0 && (
-                      <HistoryChips items={history.places} label="最後の経由地に入れる" onPick={v => { const arr = [...(bk.waypoints || [])]; arr[arr.length - 1] = v; ub("waypoints", arr); }} onRemove={v => setHistory(removeFromHistory("places", v))} />
+                      <HistoryChips historyKey="places" history={history} setHistory={setHistory} label="最後の経由地に入れる" onPick={v => { const arr = [...(bk.waypoints || [])]; arr[arr.length - 1] = v; ub("waypoints", arr); }} />
                     )}
                     <button type="button" onClick={wpAdd} style={{ width: "100%", padding: "10px", borderRadius: 8, border: `1.5px dashed ${C.border}`, background: C.cream, color: C.textMid, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>＋ 経由地を追加する</button>
                     <div style={{ fontSize: 10, color: C.textLight, marginTop: 4 }}>途中で立ち寄る場所があれば追加してください</div>
                   </FF>
                   <FF label="目的地" required error={errors.to}>
-                    <HistoryChips items={history.places} onPick={v => { ub("to", v); setErrors(p => ({ ...p, to: "" })); }} onRemove={v => setHistory(removeFromHistory("places", v))} />
+                    <HistoryChips historyKey="places" history={history} setHistory={setHistory} currentValue={bk.to} label="よく使う目的地・前に入力したもの" onPick={v => { ub("to", v); setErrors(p => ({ ...p, to: "" })); }} />
                     <textarea placeholder="住所・施設名など" value={bk.to} onChange={e => { ub("to", e.target.value); setErrors(p => ({ ...p, to: "" })); }} style={{ ...inp, minHeight: 56, resize: "vertical", borderColor: errors.to ? C.red : C.border }} />
                   </FF>
                 </>
@@ -1390,7 +1440,7 @@ function ReservationSystem() {
               <div style={card}>
                 <ST icon="👤" title="ご利用者について" />
                 <FF label="ご利用者のお名前" required error={errors.name}>
-                  <HistoryChips items={history.names} onPick={v => { ub("name", v); setErrors(p => ({ ...p, name: "" })); }} onRemove={v => setHistory(removeFromHistory("names", v))} />
+                  <HistoryChips historyKey="names" history={history} setHistory={setHistory} currentValue={bk.name} label="よく使うお名前・前に入力したもの" onPick={v => { ub("name", v); setErrors(p => ({ ...p, name: "" })); }} />
                   <input type="text" placeholder="山田 太郎" value={bk.name} onChange={e => { ub("name", e.target.value); setErrors(p => ({ ...p, name: "" })); }} style={{ ...inp, borderColor: errors.name ? C.red : C.border }} />
                 </FF>
                 <FF label="ご利用に際しての注意事項（任意）">
