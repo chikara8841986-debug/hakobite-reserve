@@ -500,6 +500,7 @@ function HistoryChips({ historyKey, history, setHistory, onPick, currentValue, l
 function ReservationSystem() {
   const [step, setStep] = useState(getInitialReserveStep);
   const [formStep, setFormStep] = useState(0);
+  const [slotBase, setSlotBase] = useState(null);  // カレンダーで最初にタップした時刻（±30分の基準）
   const [history, setHistory] = useState(loadHistory);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -557,6 +558,7 @@ function ReservationSystem() {
       setDurationFromSearch(Boolean(savedDurationFromSearch));
       if (savedSlot) {
         setSlot(savedSlot);
+        setSlotBase(savedSlot);
         setFormStep(0);
         setStep("form");
       }
@@ -758,6 +760,7 @@ function ReservationSystem() {
     if (!availabilityResult || !availabilityResult.available) return;
     const d = new Date(`${searchDate}T${searchStartHour}:${searchStartMinute}:00`);
     setSlot(d.toISOString());
+    setSlotBase(d.toISOString());
     setDurationMinutes(availabilityResult.checkedDurationMinutes);
     setDurationFromSearch(true);
     setFormStep(0);
@@ -1052,6 +1055,7 @@ function ReservationSystem() {
               if (d < new Date()) { alert("過去の日時は選択できません"); return; }
               if (selectedRepeaterId) applyRepeaterToBk(selectedRepeaterId);
               setSlot(d.toISOString());
+              setSlotBase(d.toISOString());
               setDurationFromSearch(false);
               setDurationMinutes(0);
               setFormStep(0);
@@ -1307,6 +1311,43 @@ function ReservationSystem() {
           {/* 所要時間 */}
           {curKey === "duration" && (
             <div style={card}>
+              <ST icon="🕐" title="開始時刻" />
+              {(() => {
+                const base = slotBase ? new Date(slotBase) : sD;
+                if (!base) return null;
+                const nowMs = Date.now();
+                const opts = [];
+                for (let off = -30; off <= 30; off += 5) {
+                  const d = new Date(base.getTime() + off * 60000);
+                  opts.push({
+                    iso: d.toISOString(),
+                    label: `${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}${off === 0 ? "（カレンダーで選んだ時刻）" : ""}`,
+                    past: d.getTime() < nowMs,
+                  });
+                }
+                return (
+                  <>
+                    <select
+                      value={slot || ""}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setSlot(v);
+                        // 変更後の開始時刻で重なる場合は所要時間の選択を外す
+                        const sMs = new Date(v).getTime();
+                        if (durationMinutes && busy.some(b => sMs < new Date(b.end).getTime() && sMs + durationMinutes * 60000 > new Date(b.start).getTime())) {
+                          setDurationMinutes(0);
+                        }
+                      }}
+                      style={{ ...inp, fontWeight: 700 }}>
+                      {opts.map(o => <option key={o.iso} value={o.iso} disabled={o.past}>{o.label}{o.past ? "（過去）" : ""}</option>)}
+                    </select>
+                    <div style={{ fontSize: 11, color: C.textLight, marginTop: 6, marginBottom: 16 }}>
+                      5分単位で前後30分まで調整できます。
+                    </div>
+                  </>
+                );
+              })()}
+
               <ST icon="⏱" title="どのくらいかかりそうですか？" />
               <div data-error={errors.duration ? "true" : undefined}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
@@ -1329,9 +1370,15 @@ function ReservationSystem() {
                     );
                   })}
                 </div>
-                <div style={{ fontSize: 11, color: C.textLight, marginTop: 8 }}>
-                  おおよそで構いません。灰色は次のご予約と重なるため選べません。
-                </div>
+                {Object.values(durMap).every(m => conflictsFor(m)) ? (
+                  <div style={{ fontSize: 12, color: C.red, fontWeight: 700, marginTop: 8 }}>
+                    ⚠ この開始時刻は次のご予約と重なります。上の開始時刻を変えてください。
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: C.textLight, marginTop: 8 }}>
+                    おおよそで構いません。灰色は次のご予約と重なるため選べません。
+                  </div>
+                )}
                 {errors.duration && <div style={{ fontSize: 11, color: C.red, marginTop: 6 }}>⚠ {errors.duration}</div>}
               </div>
             </div>
@@ -1895,7 +1942,7 @@ function ReservationSystem() {
                       }
                       return (
                         <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, padding: 0, textAlign: "center" }}>
-                          <button className="resv-slot-btn" onClick={() => { setSlot(sd.toISOString()); setDurationFromSearch(false); setDurationMinutes(0); setFormStep(0); setStep("form"); }} aria-label={`${d.getMonth()+1}月${d.getDate()}日 ${t.h}:${t.m.toString().padStart(2, "0")} の予約に進む`}>
+                          <button className="resv-slot-btn" onClick={() => { setSlot(sd.toISOString()); setSlotBase(sd.toISOString()); setDurationFromSearch(false); setDurationMinutes(0); setFormStep(0); setStep("form"); }} aria-label={`${d.getMonth()+1}月${d.getDate()}日 ${t.h}:${t.m.toString().padStart(2, "0")} の予約に進む`}>
                             ○
                           </button>
                         </td>
