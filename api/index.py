@@ -54,10 +54,10 @@ def fallback_reservation_to_gas(reservation_item: dict):
         return gas_res.read().decode("utf-8")
 
 # ============================================================
-# IP制限：同一IPから1時間以内に3件以上の予約を拒否
+# IP制限：同一IPから1時間以内に8件目以降の予約を拒否
 # ============================================================
 _ip_log = {}  # { ip: [タイムスタンプ, ...] }
-IP_LIMIT = 3        # 上限件数
+IP_LIMIT = 7        # 1時間あたりに受け付ける上限件数
 IP_WINDOW = 3600    # 1時間（秒）
 
 def check_ip_limit(ip: str) -> bool:
