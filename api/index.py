@@ -226,11 +226,18 @@ def get_slots():
                 # 終了時刻もフロントに返し、正確な「×」判定を行う
                 busy_slots.append({"start": utc_s, "end": utc_e})
 
-        return jsonify(busy_slots)
+        resp = jsonify(busy_slots)
+        # 業務管理アプリの電話受付画面（別ドメイン）からも空き状況を読めるようにする
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp
 
     except Exception as e:
         print(f"API Error: {e}")
-        return jsonify({"error": str(e)}), 500
+        resp = jsonify({"error": str(e)})
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp, 500
 
 @app.route('/api/availability', methods=['GET'])
 def get_availability():
@@ -328,8 +335,18 @@ def reserve():
         return resp, 204
 
     # IP制限チェック
+    # 電話受付など職員が続けて登録する場合は、暗証番号が正しければ制限の対象外にする。
+    # 暗証番号の確認は業務管理アプリの予約APIに任せる（リピーター取得と同じ仕組み）。
+    is_staff = False
+    staff_pin = str((request.get_json(silent=True) or {}).get('staffPin') or '')
+    if staff_pin:
+        try:
+            call_hakobite_reservation_api({"action": "repeaters", "pin": staff_pin}, timeout=8)
+            is_staff = True
+        except Exception as e:
+            print(f"Staff PIN check failed: {e}")
     client_ip = get_client_ip()
-    if not check_ip_limit(client_ip):
+    if not is_staff and not check_ip_limit(client_ip):
         resp = jsonify({"error": "短時間に予約が集中しています。しばらく時間をおいてから再度お試しください。"})
         for k, v in _cors_headers().items():
             resp.headers[k] = v
