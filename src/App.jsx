@@ -445,6 +445,52 @@ function removeFromHistory(key, value) {
   return saveHistory(h);
 }
 
+// 病棟・病室をボタンで組み立てる（「3階」→「東病棟」→「3」「0」「5」で「3階東病棟 305号室」）
+// 今の入力内容から階・病棟・号室を読み取って組み直すので、画面を戻っても続きから押せる
+const WARD_FLOORS = ["1階", "2階", "3階", "4階", "5階", "6階", "7階", "8階"];
+const WARD_WINGS = ["東病棟", "西病棟"];
+function parseWard(value) {
+  const v = value || "";
+  return {
+    floor: (v.match(/([1-8])階/) || [])[0] || "",
+    wing: (v.match(/東病棟|西病棟/) || [])[0] || "",
+    room: (v.match(/(\d+)号室/) || [])[1] || "",
+  };
+}
+function composeWard(w) {
+  return [w.floor + w.wing, w.room ? `${w.room}号室` : ""].filter(Boolean).join(" ");
+}
+function WardButtons({ value, onChange }) {
+  const w = parseWard(value);
+  const set = next => onChange(composeWard({ ...w, ...next }));
+  const btn = (active, label, onClick, extra = {}) => (
+    <button key={label} type="button" onClick={onClick} style={{
+      padding: "9px 0", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", minWidth: 0,
+      border: `1.5px solid ${active ? C.green : C.border}`, background: active ? C.green : C.white, color: active ? C.white : C.text, ...extra,
+    }}>{label}</button>
+  );
+  const digit = d => btn(false, d, () => set({ room: (w.room + d).slice(0, 4) }), { fontSize: 15 });
+  return (
+    <div style={{ background: C.greenBg, border: `1px solid ${C.green}40`, borderRadius: 10, padding: 8, marginTop: 6 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 4, marginBottom: 6 }}>
+        {WARD_FLOORS.map(f => btn(w.floor === f, f, () => set({ floor: w.floor === f ? "" : f })))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, marginBottom: 6 }}>
+        {WARD_WINGS.map(x => btn(w.wing === x, x, () => set({ wing: w.wing === x ? "" : x })))}
+      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 4 }}>
+        号室（数字を続けて押す）{w.room && <span style={{ fontSize: 13 }}>：{w.room}号室</span>}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 4 }}>
+        {["1", "2", "3", "4", "5"].map(digit)}
+        {btn(false, "⌫", () => set({ room: w.room.slice(0, -1) }), { fontSize: 15, color: C.textMid })}
+        {["6", "7", "8", "9", "0"].map(digit)}
+        {btn(false, "全消去", () => onChange(""), { fontSize: 11, color: C.red })}
+      </div>
+    </div>
+  );
+}
+
 function HistoryChips({ historyKey, history, setHistory, onPick, currentValue, label = "よく使う候補・前に入力したもの" }) {
   const favs = history[favKeyOf(historyKey)] || [];
   const rest = (history[historyKey] || []).filter(v => !favs.includes(v));
@@ -1410,8 +1456,9 @@ function ReservationSystem() {
                 <HistoryChips historyKey="places" history={history} setHistory={setHistory} currentValue={bk.from} label={isTaxi ? "よく使う出発地・前に入力したもの" : "よく使う場所・前に入力したもの"} onPick={v => { ub("from", v); setErrors(p => ({ ...p, from: "" })); }} />
                 <textarea placeholder="住所・施設名など" value={bk.from} onChange={e => { ub("from", e.target.value); setErrors(p => ({ ...p, from: "" })); }} style={{ ...inp, minHeight: 56, resize: "vertical", borderColor: errors.from ? C.red : C.border }} />
               </FF>
-              <FF label="病棟・病室など（任意）">
-                <input type="text" placeholder="例：○○病棟 △△号室" value={bk.wardRoom} onChange={e => ub("wardRoom", e.target.value)} style={inp} />
+              <FF label="病棟・病室など（任意・ボタンを続けて押すと入ります）">
+                <input type="text" placeholder="例：3階東病棟 305号室" value={bk.wardRoom} onChange={e => ub("wardRoom", e.target.value)} style={inp} />
+                <WardButtons value={bk.wardRoom} onChange={v => ub("wardRoom", v)} />
               </FF>
 
               {isTaxi && (
