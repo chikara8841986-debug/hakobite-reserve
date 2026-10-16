@@ -8,8 +8,12 @@ app = Flask(__name__)
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
 # 空き判定の設定（チューニング前提の定数）
+# 空き判定のルール：「予約の開始30分前〜終了」が、カレンダーの予定と1分でも重なったら予約不可。
+# つまり予定が終わってから30分間（＝次の予約の移動時間）は予約できない（代表確認 2026-10-16）。
+# 画面側の〇×（src/App.jsx の isRangeBusy、業務管理アプリの電話受付 phoneConflicts）も
+# 同じルールで判定しているので、ここを変えるときは必ず全部そろえる。
 TRAVEL_BUFFER_BEFORE_MIN = 30   # 予約開始前に確保する移動準備イベントぶんのバッファ
-POST_BOOKING_MARGIN_MIN = 30    # 前の予約終了直後に次の予約を詰め込みすぎないための余白
+POST_BOOKING_MARGIN_MIN = 0     # 移動時間とは別に、予定の終了後に追加で空ける余白（いまは使わない）
 BUSINESS_HOUR_START = 8         # 代替候補探索・開始時刻の下限
 BUSINESS_HOUR_END = 18          # 代替候補探索・開始時刻の上限
 
