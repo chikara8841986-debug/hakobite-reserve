@@ -42,14 +42,16 @@ const fmt = n => n.toLocaleString();
 const PRICE_HANDOFF_KEY = "hakobite_price_to_reserve_v1";
 const WAITING_MINUTE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5); // 0,5,...,120
 
-// 空き判定：「予約の開始30分前（移動の時間）〜終了」がカレンダーの予定と重なったら予約不可。
+// 空き判定：「予約の開始30分前（移動の時間）〜終了」が「カレンダーの予定〜その終了30分後（余白）」と
+// 重なったら予約不可。つまり予定が終わってから1時間は予約できない。
 // サーバー（api/index.py の _is_window_busy）と同じルール。ずれると〇なのに送信で断られるので、変えるときは両方そろえる。
-const TRAVEL_BUFFER_MIN = 30;
+const TRAVEL_BUFFER_MIN = 30;   // サーバーの TRAVEL_BUFFER_BEFORE_MIN
+const AFTER_MARGIN_MIN = 30;    // サーバーの POST_BOOKING_MARGIN_MIN
 const MIN_BOOKING_MIN = 30;  // いちばん短い所要時間（〇×や開始時刻の可否はこの長さで判定する）
 function isRangeBusy(busy, startMs, minutes) {
   const ws = startMs - TRAVEL_BUFFER_MIN * 60000;
   const we = startMs + minutes * 60000;
-  return busy.some(b => ws < new Date(b.end).getTime() && we > new Date(b.start).getTime());
+  return busy.some(b => ws < new Date(b.end).getTime() + AFTER_MARGIN_MIN * 60000 && we > new Date(b.start).getTime());
 }
 
 // ============================================================
@@ -1399,7 +1401,7 @@ function ReservationSystem() {
                       {opts.map(o => <option key={o.iso} value={o.iso} disabled={o.past || o.busy}>{o.label}{o.past ? "（過去）" : o.busy ? "（予約不可）" : ""}</option>)}
                     </select>
                     <div style={{ fontSize: 11, color: C.textLight, marginTop: 6, marginBottom: 16 }}>
-                      5分単位で前後30分まで調整できます。前後の予定と、お迎えまでの移動時間（30分）に重なる時刻は選べません。
+                      5分単位で前後30分まで調整できます。前後の予定に重なる時刻や、予定が終わってから1時間以内の時刻は選べません。
                     </div>
                   </>
                 );
@@ -1995,7 +1997,7 @@ function ReservationSystem() {
                         return <td key={i} className="resv-past-cell" style={{ border: "1px solid #e0e0e0", textAlign: "center", padding: "4px 0", fontSize: 12 }} title="過去のため予約不可">×</td>;
                       }
                       if (isBusy) {
-                        return <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, textAlign: "center", padding: "4px 0", color: "#ef4444", fontSize: 12, fontWeight: 700 }} title="他のご予約、またはお迎えの移動時間と重なります">×</td>;
+                        return <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, textAlign: "center", padding: "4px 0", color: "#ef4444", fontSize: 12, fontWeight: 700 }} title="他のご予約、または予定のあとの移動・準備の時間（1時間）と重なります">×</td>;
                       }
                       return (
                         <td key={i} style={{ border: "1px solid #e0e0e0", background: baseBg, padding: 0, textAlign: "center" }}>
@@ -2016,7 +2018,7 @@ function ReservationSystem() {
       <div style={{ padding: "8px 12px 0" }}>
         <div style={{ fontSize: 10, color: C.textLight, marginBottom: 8, textAlign: "center", display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
           <span><span style={{ color: C.pink, fontWeight: 700, fontSize: 14 }}>○</span> 予約可（タップ）</span>
-          <span><span style={{ color: "#ef4444", fontWeight: 700, fontSize: 14 }}>×</span> 予約不可（予定のあと30分は移動時間）</span>
+          <span><span style={{ color: "#ef4444", fontWeight: 700, fontSize: 14 }}>×</span> 予約不可（予定のあと1時間は移動・準備）</span>
           <span><span style={{ color: "#cbd5e1", fontWeight: 700, fontSize: 14 }}>×</span> 過去</span>
         </div>
         <PriceLink />
