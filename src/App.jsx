@@ -45,6 +45,16 @@ const WAITING_MINUTE_OPTIONS = Array.from({ length: 25 }, (_, i) => i * 5); // 0
 // 空き判定：「予約の開始30分前（移動の時間）〜終了」が「カレンダーの予定〜その終了30分後（余白）」と
 // 重なったら予約不可。つまり予定が終わってから1時間は予約できない。
 // サーバー（api/index.py の _is_window_busy）と同じルール。ずれると〇なのに送信で断られるので、変えるときは両方そろえる。
+// 夜の枠：カレンダーの下のボタンで、18時以降（開始23時まで）も選べるようにする
+const DAY_END_HOUR = 18;
+const LATE_END_HOUR = 23;
+const NIGHT_FEE_NOTE = "※18時以降の予約は追加料金が発生する場合があります";
+function isNightStart(iso) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  return d.getHours() * 60 + d.getMinutes() >= DAY_END_HOUR * 60;
+}
+
 const TRAVEL_BUFFER_MIN = 30;   // サーバーの TRAVEL_BUFFER_BEFORE_MIN
 const AFTER_MARGIN_MIN = 30;    // サーバーの POST_BOOKING_MARGIN_MIN
 const MIN_BOOKING_MIN = 30;  // いちばん短い所要時間（〇×や開始時刻の可否はこの長さで判定する）
@@ -630,6 +640,7 @@ function ReservationSystem() {
   };
   const [slot, setSlot] = useState(null);
   const [wOff, setWOff] = useState(0);
+  const [lateOpen, setLateOpen] = useState(false);  // 18時以降の枠を出しているか
   const [busy, setBusy] = useState([]);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -774,7 +785,8 @@ function ReservationSystem() {
   const dn = ["日", "月", "火", "水", "木", "金", "土"];
   const bd = new Date(); bd.setHours(0, 0, 0, 0); bd.setDate(bd.getDate() + wOff * 7);
   const wd = Array.from({ length: 7 }, (_, i) => { const d = new Date(bd); d.setDate(d.getDate() + i); return d; });
-  const ts = []; for (let h = 8; h <= 18; h++) { ts.push({ h, m: 0 }); if (h < 18) ts.push({ h, m: 30 }); }
+  const lastHour = lateOpen ? LATE_END_HOUR : DAY_END_HOUR;
+  const ts = []; for (let h = 8; h <= lastHour; h++) { ts.push({ h, m: 0 }); if (h < lastHour) ts.push({ h, m: 30 }); }
   const ub = (k, v) => setBk(p => ({ ...p, [k]: v }));
 
   const bookerRequiresName = ["ソーシャルワーカー", "ケアマネジャー", "家族・代理人", "施設担当者", "ふじ介護タクシー", "その他（本人以外）"].includes(bk.bookerType);
@@ -1186,6 +1198,7 @@ function ReservationSystem() {
             <div style={{ fontSize: 11, color: C.textLight, marginBottom: 2 }}>📅 日時</div>
             <div style={{ fontSize: 15, fontWeight: 800, color: C.green }}>{dateStr}</div>
             <div style={{ fontSize: 12, color: C.textMid, marginTop: 2 }}>〜 {endStr}（{formatDuration(durationMinutes)}）</div>
+            {isNightStart(slot) && <div style={{ fontSize: 12, color: "#6d28d9", fontWeight: 700, marginTop: 6 }}>🌙 {NIGHT_FEE_NOTE}</div>}
           </div>
 
           <div style={{ marginBottom: 12 }}>
@@ -1382,6 +1395,8 @@ function ReservationSystem() {
                     past: d.getTime() < nowMs,
                     // 移動の時間を含めて前後の予定と重なる時刻は選べない（カレンダーの×と同じ判定）
                     busy: isRangeBusy(busy, d.getTime(), MIN_BOOKING_MIN),
+                    // 開始は23時まで（日付をまたぐ開始時刻も選べない）
+                    late: d.getDate() !== base.getDate() || d.getHours() * 60 + d.getMinutes() > LATE_END_HOUR * 60,
                   });
                 }
                 return (
@@ -1398,11 +1413,14 @@ function ReservationSystem() {
                         }
                       }}
                       style={{ ...inp, fontWeight: 700 }}>
-                      {opts.map(o => <option key={o.iso} value={o.iso} disabled={o.past || o.busy}>{o.label}{o.past ? "（過去）" : o.busy ? "（予約不可）" : ""}</option>)}
+                      {opts.map(o => <option key={o.iso} value={o.iso} disabled={o.past || o.busy || o.late}>{o.label}{o.past ? "（過去）" : o.late ? "（23時まで）" : o.busy ? "（予約不可）" : ""}</option>)}
                     </select>
-                    <div style={{ fontSize: 11, color: C.textLight, marginTop: 6, marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, color: C.textLight, marginTop: 6, marginBottom: isNightStart(slot) ? 6 : 16 }}>
                       5分単位で前後30分まで調整できます。前後の予定に重なる時刻や、予定が終わってから1時間以内の時刻は選べません。
                     </div>
+                    {isNightStart(slot) && (
+                      <div style={{ fontSize: 12, color: "#6d28d9", fontWeight: 700, background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 8, padding: "8px 10px", marginBottom: 16 }}>🌙 {NIGHT_FEE_NOTE}</div>
+                    )}
                   </>
                 );
               })()}
@@ -1984,7 +2002,7 @@ function ReservationSystem() {
                 const isNowRow = idx === nowSlotIdx;
                 return (
                   <tr key={idx} ref={isNowRow ? el => { if (el && !el.dataset.scrolled) { el.dataset.scrolled = '1'; el.scrollIntoView({ block: 'center', behavior: 'instant' }); } } : null}>
-                    <td style={{ border: "1px solid #e0e0e0", background: isNowRow ? "#fef3c7" : "#fafafa", padding: "5px 2px", fontWeight: 700, fontSize: 11, color: isNowRow ? "#92400e" : C.text, textAlign: "center" }}>
+                    <td style={{ border: "1px solid #e0e0e0", background: isNowRow ? "#fef3c7" : (t.h * 60 + t.m > DAY_END_HOUR * 60 ? "#f5f3ff" : "#fafafa"), padding: "5px 2px", fontWeight: 700, fontSize: 11, color: isNowRow ? "#92400e" : (t.h * 60 + t.m > DAY_END_HOUR * 60 ? "#7c3aed" : C.text), textAlign: "center" }}>
                       {t.h}:{t.m.toString().padStart(2, "0")}
                     </td>
                     {wd.map((d, i) => {
@@ -2016,6 +2034,11 @@ function ReservationSystem() {
       )}
 
       <div style={{ padding: "8px 12px 0" }}>
+        <button type="button" onClick={() => setLateOpen(v => !v)}
+          style={{ width: "100%", padding: "11px 8px", borderRadius: 10, border: "2px solid #ddd6fe", background: lateOpen ? C.white : "#f5f3ff", color: "#6d28d9", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+          {lateOpen ? "▲ 18時以降の枠をしまう" : "🌙 18時以降の枠も見る（23時まで）▼"}
+        </button>
+        <div style={{ fontSize: 11, color: "#7c3aed", fontWeight: 700, textAlign: "center", margin: "6px 0 10px" }}>{NIGHT_FEE_NOTE}</div>
         <div style={{ fontSize: 10, color: C.textLight, marginBottom: 8, textAlign: "center", display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
           <span><span style={{ color: C.pink, fontWeight: 700, fontSize: 14 }}>○</span> 予約可（タップ）</span>
           <span><span style={{ color: "#ef4444", fontWeight: 700, fontSize: 14 }}>×</span> 予約不可（予定のあと1時間は移動・準備）</span>
