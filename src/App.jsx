@@ -1015,6 +1015,8 @@ function ReservationSystem() {
         setDraftAvailable(false);
         await new Promise(res => setTimeout(res, 400));
         setStep("success");
+      } else if (r.status === 403) {
+        alert("申し訳ありません、この通信環境からのご予約は受け付けておりません。お手数ですがお電話（080-4950-6821）でご連絡ください。");
       } else if (r.status === 409) {
         alert("申し訳ありません、直前に別のご予約が入りました。別の時間で再度お試しください。");
         setAvailabilityResult(null);

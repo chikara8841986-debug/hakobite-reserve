@@ -46,6 +46,27 @@ def call_hakobite_reservation_api(payload: dict, timeout: int = 12):
         raise RuntimeError((result or {}).get("error", "Hakobite reservation API request failed"))
     return result.get("result") or {}
 
+def get_client_ip() -> str:
+    """予約を送ってきた通信元のIPアドレス（Vercelが付ける X-Forwarded-For の先頭）"""
+    return (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or request.headers.get("X-Real-IP", "")
+        or request.remote_addr
+        or ""
+    )
+
+def is_ip_blocked(ip: str) -> bool:
+    """業務管理アプリの「予約者チェック」でブロックされた通信元か。
+    確認に失敗したときは予約を止めない（本物のお客様の予約を落とさないため）。"""
+    if not ip:
+        return False
+    try:
+        result = call_hakobite_reservation_api({"action": "checkIp", "ip": ip}, timeout=5)
+        return bool(result.get("blocked"))
+    except Exception as e:
+        print(f"IP block check failed (allowing): {e}")
+        return False
+
 def fallback_reservation_to_gas(reservation_item: dict):
     payload = json.dumps({"addReservation": reservation_item}).encode("utf-8")
     req = urllib.request.Request(
@@ -311,7 +332,13 @@ def reserve():
         return resp, 204
 
     # 連続予約の件数制限は設けない（代表判断 2026-10-31）。
-    # 直近の予約者の確認・制限は業務管理アプリ側で行う方針。
+    # かわりに、業務管理アプリの「予約者チェック」でブロックした通信元からの予約は受け付けない。
+    client_ip = get_client_ip()
+    if is_ip_blocked(client_ip):
+        resp = jsonify({"error": "blocked", "message": "申し訳ありません、この通信環境からのご予約は受け付けておりません。お手数ですがお電話でご連絡ください。"})
+        for k, v in _cors_headers().items():
+            resp.headers[k] = v
+        return resp, 403
 
     try:
         data = request.json
@@ -436,6 +463,7 @@ def reserve():
                     "memo": data.get("note", data.get("notes", data.get("memo", ""))),
                     "calendarEventId": calendar_event_id or "",
                     "travelEventId": travel_event_id or "",
+                    "clientIp": client_ip,
                     "source": "reserve_app"
                 }
                 call_hakobite_reservation_api({
