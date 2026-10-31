@@ -1015,8 +1015,6 @@ function ReservationSystem() {
         setDraftAvailable(false);
         await new Promise(res => setTimeout(res, 400));
         setStep("success");
-      } else if (r.status === 429) {
-        alert("短時間に予約が集中しています。しばらく時間をおいてから再度お試しください。");
       } else if (r.status === 409) {
         alert("申し訳ありません、直前に別のご予約が入りました。別の時間で再度お試しください。");
         setAvailabilityResult(null);
