@@ -408,6 +408,38 @@ function PriceCalculator() {
 // ============================================================
 // 入力履歴とお気に入り（この端末のブラウザにだけ保存。サーバーには送らない）
 // ============================================================
+// 「わたしの情報」：予約した人が確認画面で保存を選んだときだけ、この端末に1人分を上書き保存する。
+// 次回はボタン1つで入力できる。ほかの人の情報とは混ざらない（履歴とは別。サーバーにも送らない）。
+// 日時・備考・ご依頼内容など、その回だけの内容は保存しない。
+const PROFILE_KEY = "hakobite_my_profile_v1";
+const PROFILE_FIELDS = [
+  "name", "tel", "email", "careNotes",
+  "bookerType", "bookerName", "bookerTel", "bookerTelSame", "familyHospitalStaffName",
+  "serviceType", "from", "wardRoom", "to", "waypoints",
+  "wheelchair", "careReq", "passengers", "destAssist", "payments",
+];
+function loadMyProfile() {
+  try {
+    const o = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
+    return o && o.data && typeof o.data.name === "string" && o.data.name.trim() ? o : null;
+  } catch {
+    return null;
+  }
+}
+function saveMyProfile(bk) {
+  const data = {};
+  PROFILE_FIELDS.forEach(k => { if (bk[k] !== undefined) data[k] = bk[k]; });
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), data }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function clearMyProfile() {
+  try { localStorage.removeItem(PROFILE_KEY); } catch {}
+}
+
 const HISTORY_KEY = "hakobite_input_history_v1";
 const HISTORY_MAX = 12;  // 自動で残る履歴の上限
 const FAV_MAX = 30;      // お気に入りの上限（履歴の上限では消えない）
@@ -570,6 +602,10 @@ function ReservationSystem() {
   const [formStep, setFormStep] = useState(0);
   const [slotBase, setSlotBase] = useState(null);  // カレンダーで最初にタップした時刻（±30分の基準）
   const [history, setHistory] = useState(loadHistory);
+  const [myProfile, setMyProfile] = useState(loadMyProfile);
+  const [profileApplied, setProfileApplied] = useState(false);  // 「保存した情報で入力する」を押した直後
+  const [saveProfileChecked, setSaveProfileChecked] = useState(false);
+  const [profileSavedNow, setProfileSavedNow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState("");
@@ -903,6 +939,31 @@ function ReservationSystem() {
     return Object.keys(e).length === 0;
   };
 
+  const applyMyProfile = () => {
+    const p = loadMyProfile();
+    if (!p) return;
+    setBk(prev => ({ ...prev, ...p.data }));
+    setErrors({});
+    setProfileApplied(true);
+    setSaveProfileChecked(true);  // 内容を直したら次回のために上書きできるよう、最初からチェックしておく
+  };
+  const forgetMyProfile = () => {
+    if (!window.confirm("この端末に保存した情報を消しますか？")) return;
+    clearMyProfile();
+    setMyProfile(null);
+    setProfileApplied(false);
+  };
+  useEffect(() => {
+    if (!profileApplied || step !== "form" || !(durationFromSearch || durationMinutes)) return;
+    setProfileApplied(false);
+    setSubmitted(true);
+    if (validate()) {
+      setRecaptchaToken(null);
+      setStep("confirm");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileApplied, durationMinutes, durationFromSearch, step]);
+
   const goConfirm = (e) => {
     e.preventDefault();
     setSubmitted(true);
@@ -1011,6 +1072,12 @@ function ReservationSystem() {
         // 次回の入力を楽にするため、この端末にだけ入力履歴を残す
         addToHistory("names", [bk.name]);
         setHistory(addToHistory("places", [bk.from, ...wpList, bk.to]));
+        if (saveProfileChecked && saveMyProfile(bk)) {
+          setMyProfile(loadMyProfile());
+          setProfileSavedNow(true);
+        } else {
+          setProfileSavedNow(false);
+        }
         try { localStorage.removeItem(DRAFT_KEY); } catch {}
         setDraftAvailable(false);
         await new Promise(res => setTimeout(res, 400));
@@ -1152,6 +1219,11 @@ function ReservationSystem() {
         {!["ソーシャルワーカー", "ふじ介護タクシー"].includes(bk.bookerType) && (
           <p style={{ color: C.textMid, fontSize: 12, lineHeight: 1.7, marginBottom: 20 }}>確認のご連絡を差し上げます。</p>
         )}
+        {profileSavedNow && (
+          <div style={{ background: C.greenBg, border: `1px solid ${C.green}40`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: C.green, textAlign: "left", lineHeight: 1.6 }}>
+            📋 今回の入力内容をこの端末に保存しました。次回は日時を選んだあと「保存した情報で入力する」を押すと、入力を省けます。
+          </div>
+        )}
         <button onClick={() => { setAvailabilityResult(null); setDurationFromSearch(false); refreshBusy(); setStep("slots"); setWOff(0); }} style={bGreen}>カレンダーに戻る</button>
       </div>
     </div>
@@ -1261,6 +1333,17 @@ function ReservationSystem() {
               </div>
             </div>
           )}
+
+          {/* 次回のために保存（この端末だけ・1人分を上書き） */}
+          <label style={{ display: "flex", gap: 10, alignItems: "flex-start", background: C.cream, border: `1px solid ${C.borderLight}`, borderRadius: 8, padding: "10px 12px", marginBottom: 14, cursor: "pointer" }}>
+            <input type="checkbox" checked={saveProfileChecked} onChange={e => setSaveProfileChecked(e.target.checked)} style={{ width: 20, height: 20, marginTop: 1, flexShrink: 0, accentColor: C.green }} />
+            <span style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>
+              <strong>次回のために、今回の入力内容をこの端末に保存する</strong>
+              <span style={{ display: "block", fontSize: 11, color: C.textMid, marginTop: 2 }}>
+                ご利用者・ご予約者・ご連絡先・行き先などを1件分だけ保存します（前に保存した内容は上書き）。日時と備考は保存しません。家族や施設で共用している端末ではチェックしないでください。
+              </span>
+            </span>
+          </label>
 
           {/* reCAPTCHA */}
           <div style={{ marginBottom: 14 }}>
@@ -1376,6 +1459,21 @@ function ReservationSystem() {
             </div>
           )}
         </div>
+
+        {curIdx === 0 && myProfile && (
+          <div style={{ ...card, background: C.blueBg, border: `1.5px solid ${C.blue}40` }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.blue, marginBottom: 4 }}>📋 この端末に保存した情報があります</div>
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 10, lineHeight: 1.6 }}>
+              {myProfile.data.name} 様{myProfile.data.from ? `／${myProfile.data.from}${myProfile.data.to ? " → " + myProfile.data.to : ""}` : ""}
+            </div>
+            {profileApplied ? (
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>✓ 入力しました。下で開始時刻と所要時間を選ぶと、確認画面に進みます。</div>
+            ) : (
+              <button type="button" onClick={applyMyProfile} style={{ ...bGreen, background: C.blue, marginBottom: 0 }}>この情報で入力する</button>
+            )}
+            <button type="button" onClick={forgetMyProfile} style={{ background: "none", border: "none", color: C.textLight, fontSize: 11, textDecoration: "underline", cursor: "pointer", marginTop: 8, padding: 0 }}>保存した情報を消す</button>
+          </div>
+        )}
 
         <form onSubmit={goNext}>
           {/* 所要時間 */}
