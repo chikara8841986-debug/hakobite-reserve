@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-import datetime, json, os, smtplib, urllib.request
+import datetime, json, os, re, smtplib, urllib.request
 from email.mime.text import MIMEText
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -45,6 +45,25 @@ def call_hakobite_reservation_api(payload: dict, timeout: int = 12):
     if not isinstance(result, dict) or result.get("ok") is False:
         raise RuntimeError((result or {}).get("error", "Hakobite reservation API request failed"))
     return result.get("result") or {}
+
+def calendar_marks(data: dict) -> str:
+    """カレンダーの予定名の頭に付ける印。車いすの種類（【リ】【普】【自】【不】）と、
+    迎え先が病院なら🏥・それ以外（自宅・施設など）なら🏠。
+    病院は「病院」「医院」のほか「医療センター」「クリニック」「診療所」も含める（丸亀医療センターなど）。"""
+    w = str(data.get('wheelchair') or '')
+    if 'リクライニング' in w:
+        wc = '【リ】'
+    elif '普通' in w:
+        wc = '【普】'
+    elif '自分' in w or '自前' in w or '持参' in w:
+        wc = '【自】'
+    elif w in ('利用なし', '不要', 'なし'):
+        wc = '【不】'
+    else:
+        wc = ''  # 車いすの指定がない予約には付けない
+    pickup = str(data.get('from') or '')
+    place = '🏥' if re.search('病院|医院|医療センター|クリニック|診療所', pickup) else '🏠'
+    return wc + place
 
 def get_client_ip() -> str:
     """予約を送ってきた通信元のIPアドレス（Vercelが付ける X-Forwarded-For の先頭）"""
@@ -344,7 +363,8 @@ def reserve():
         data = request.json
         start_str = data.get('start')
         duration_minutes = data.get('duration_minutes', 30)
-        summary = data.get('summary', '予約')
+        # カレンダーの予定名の頭に、車いすの種類と迎え先の印を付ける（例：【普】🏥【予約】山田 太郎様 (1時間)）
+        summary = calendar_marks(data) + data.get('summary', '予約')
         description = data.get('description', '')
         name = data.get('name', 'お客様')
         to_email = data.get('email', '')
