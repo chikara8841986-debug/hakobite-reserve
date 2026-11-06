@@ -11,8 +11,10 @@ JST = datetime.timezone(datetime.timedelta(hours=9))
 # 空き判定のルール：「予約の開始30分前〜終了」が、「カレンダーの予定〜その終了30分後」と
 # 1分でも重なったら予約不可。つまり予定が終わってから1時間（余白30分＋次の予約の移動30分）は
 # 予約できない（代表確認 2026-10-16）。
-# 画面側の〇×（src/App.jsx の isRangeBusy、業務管理アプリの電話受付 phoneConflicts）も
-# 同じルールで判定しているので、ここを変えるときは必ず全部そろえる。
+# 画面側の〇×（src/App.jsx の isRangeBusy）も同じルールで判定しているので、ここを変えるときは必ずそろえる。
+# ただし業務管理アプリの電話受付（allowTightSchedule を送ってくる）は、前の予定のあと1時間でも予約できる。
+# そのときは「予約の時間そのもの（開始〜終了）が予定と重なるか」だけを見る（_is_overlapping。代表判断 2026-11-06）。
+# 電話受付の画面（phoneConflicts）はこちらの判定とそろえてある。
 TRAVEL_BUFFER_BEFORE_MIN = 30   # 予約開始前に確保する移動準備イベントぶんのバッファ
 POST_BOOKING_MARGIN_MIN = 30    # 移動時間とは別に、予定の終了後に追加で空ける余白
 BUSINESS_HOUR_START = 8         # 代替候補探索・開始時刻の下限
@@ -132,6 +134,10 @@ def _is_window_busy(busy_intervals, window_start, window_end):
     # 既存予約の終了直後は POST_BOOKING_MARGIN_MIN 分だけ広げて判定し、詰め込みすぎを防ぐ
     margin = datetime.timedelta(minutes=POST_BOOKING_MARGIN_MIN)
     return any(window_start < (b_end + margin) and window_end > b_start for b_start, b_end in busy_intervals)
+
+def _is_overlapping(busy_intervals, start, end):
+    """予約の時間そのもの（開始〜終了）が、カレンダーの予定と1分でも重なるか（移動・余白は見ない）。電話受付用。"""
+    return any(start < b_end and end > b_start for b_start, b_end in busy_intervals)
 
 def _find_alternative_starts(busy_intervals, base_date, duration_minutes, now, requested_start, before_limit=2, after_limit=2):
     """同日内で、移動バッファを含めて空いている開始時刻を、希望時刻より前と後それぞれ近い順に最大limit件ずつ返す。"""
@@ -377,7 +383,12 @@ def reserve():
         # サーバー側の直前重複チェック（検索・入力の間に他の予約が入るダブルブッキングを防ぐ）
         window_start = start_dt - datetime.timedelta(minutes=TRAVEL_BUFFER_BEFORE_MIN)
         busy_at_submit = _get_busy_intervals_for_date(service, calendar_id, start_dt.strftime('%Y-%m-%d'))
-        if _is_window_busy(busy_at_submit, window_start, end_dt):
+        if data.get('allowTightSchedule'):
+            # 電話受付：前の予定のあと1時間の余白は求めない（電話口で移動が間に合うか確かめて入れるため）
+            conflict = _is_overlapping(busy_at_submit, start_dt, end_dt)
+        else:
+            conflict = _is_window_busy(busy_at_submit, window_start, end_dt)
+        if conflict:
             resp = jsonify({"error": "conflict", "message": "申し訳ありません、直前に別のご予約が入りました。別の時間で再度お試しください。"})
             for k, v in _cors_headers().items():
                 resp.headers[k] = v
@@ -396,7 +407,8 @@ def reserve():
         # カレンダーへ移動時間（予約開始30分前）を追加
         travel_end_dt = start_dt
         travel_start_dt = start_dt - datetime.timedelta(minutes=30)
-        travel_summary = data.get('gcalTravelSummary', f'【移動】{name}様のお迎え準備')
+        # 移動の予定名にも、予約本体と同じ印を付ける（例：【普】🏥【移動】山田 太郎様のお迎え準備）
+        travel_summary = calendar_marks(data) + data.get('gcalTravelSummary', f'【移動】{name}様のお迎え準備')
         travel_event = {
             'summary': travel_summary,
             'description': f'【移動時間】{name}様 お迎えの準備\nお迎え先: {data.get("from", "")}',
