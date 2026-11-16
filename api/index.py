@@ -520,3 +520,166 @@ def reserve():
         for k, v in _cors_headers().items():
             resp.headers[k] = v
         return resp, 500
+
+
+# ---- 業務管理アプリで予約を直したとき・消したときに、Googleカレンダーの予定も合わせる ----
+# 流れ：業務管理アプリ → 業務管理のサーバー（/api/db。4桁の合言葉で守られている）が「変更の指示」に署名して
+# ここへ送る → ここは業務管理のサーバー（/api/reservation の verifyCalendarJob）に「本物の署名か」を確かめてから
+# カレンダーを書き換える。署名の鍵は業務管理のサーバーだけが持っているので、ここを直接たたいても何もできない。
+CALENDAR_JOB_MAX_BYTES = 20 * 1024
+EVENT_ID_RE = re.compile(r'^[A-Za-z0-9_@.\-]{1,300}$')
+WHEELCHAIR_MARK_RE = re.compile(r'^(【[リ普自不]】)')
+
+
+def duration_label(minutes: int) -> str:
+    h, m = divmod(int(minutes), 60)
+    if h == 0:
+        return f'{m}分'
+    return f'{h}時間' if m == 0 else f'{h}時間{m}分'
+
+
+def merge_description(desc: str, fields, stamp: str) -> str:
+    """説明欄の「■項目: 値」の行のうち、変わった項目だけを書き換える（ない項目は「■受付」の前に足す）。
+    ほかの行（メール・支払など、業務管理アプリで直さない情報）はそのまま残す。最後に「■変更」の行を付け直す。"""
+    lines = (desc or '').split('\n')
+
+    def put(key, value):
+        prefix = f'■{key}:'
+        new_line = f'{prefix} {value}'
+        for i, line in enumerate(lines):
+            if line.startswith(prefix):
+                lines[i] = new_line
+                return
+        anchor = next((i for i, line in enumerate(lines) if line.startswith('■受付:')), None)
+        if anchor is None:
+            lines.append(new_line)
+        else:
+            lines.insert(anchor, new_line)
+
+    for key, value in fields:
+        put(str(key), str(value).replace('\r', '').replace('\n', ' / '))
+    stamp_prefix = '■変更:'
+    lines[:] = [line for line in lines if not line.startswith(stamp_prefix)]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    lines.append(f'{stamp_prefix} {stamp}')
+    return '\n'.join(lines)
+
+
+def _http_status(err) -> int:
+    resp = getattr(err, 'resp', None)
+    try:
+        return int(getattr(resp, 'status', 0) or 0)
+    except Exception:
+        return 0
+
+
+def _get_event(service, calendar_id, event_id):
+    """予定を読む。なければ（消されている・取り消し済み）None。"""
+    try:
+        ev = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
+    except Exception as e:
+        if _http_status(e) in (404, 410):
+            return None
+        raise
+    if not ev or ev.get('status') == 'cancelled':
+        return None
+    return ev
+
+
+def _delete_event(service, calendar_id, event_id) -> str:
+    try:
+        service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+        return 'deleted'
+    except Exception as e:
+        if _http_status(e) in (404, 410):
+            return 'already_gone'
+        raise
+
+
+def _verify_calendar_job(job_text: str, sig: str) -> bool:
+    """業務管理のサーバーに、この指示が本物（自分が署名したもの・期限内）かを確かめてもらう。
+    確かめられないときは書き換えない（安全側）。"""
+    try:
+        result = call_hakobite_reservation_api({"action": "verifyCalendarJob", "job": job_text, "sig": sig}, timeout=8)
+        return result.get("valid") is True
+    except Exception as e:
+        print(f"Calendar job verification failed: {e}")
+        return False
+
+
+@app.route('/api/calendar-sync', methods=['POST'])
+def calendar_sync():
+    data = request.get_json(silent=True) or {}
+    job_text = data.get('job')
+    sig = data.get('sig')
+    if not isinstance(job_text, str) or not isinstance(sig, str) or len(job_text.encode('utf-8')) > CALENDAR_JOB_MAX_BYTES:
+        return jsonify({"ok": False, "error": "bad_request"}), 400
+    if not _verify_calendar_job(job_text, sig):
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    try:
+        job = json.loads(job_text)
+        now_ms = datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000
+        if not isinstance(job, dict) or float(job.get('exp') or 0) < now_ms:
+            return jsonify({"ok": False, "error": "expired"}), 403
+        op = job.get('op')
+        event_id = str(job.get('eventId') or '')
+        travel_id = str(job.get('travelEventId') or '')
+        if op not in ('update', 'delete') or not EVENT_ID_RE.match(event_id) or (travel_id and not EVENT_ID_RE.match(travel_id)):
+            return jsonify({"ok": False, "error": "bad_job"}), 400
+
+        service = get_service()
+        calendar_id = os.environ.get("CALENDAR_ID", "chikara8841986@gmail.com")
+
+        if op == 'delete':
+            main = _delete_event(service, calendar_id, event_id)
+            travel = _delete_event(service, calendar_id, travel_id) if travel_id else 'none'
+            return jsonify({"ok": True, "main": main, "travel": travel})
+
+        minutes = int(job.get('minutes') or 0)
+        if not (15 <= minutes <= 720):
+            return jsonify({"ok": False, "error": "bad_minutes"}), 400
+        start_dt = datetime.datetime.fromisoformat(str(job.get('start')).replace('Z', '+00:00')).astimezone(JST)
+        end_dt = start_dt + datetime.timedelta(minutes=minutes)
+        name = str(job.get('name') or 'お客様').strip()[:100]
+        fields = job.get('fields') if isinstance(job.get('fields'), list) else []
+        fields = [(str(f[0])[:30], str(f[1])[:1000]) for f in fields[:20] if isinstance(f, list) and len(f) == 2]
+        stamp = '業務管理アプリで修正（' + datetime.datetime.now(JST).strftime('%Y/%m/%d %H:%M') + '）'
+
+        ev = _get_event(service, calendar_id, event_id)
+        if ev is None:
+            main = 'missing'
+            marks = calendar_marks({'wheelchair': job.get('wheelchair'), 'from': job.get('from')})
+        else:
+            marks = calendar_marks({'wheelchair': job.get('wheelchair'), 'from': job.get('from')})
+            # 車いすの種類がこちらで分からないときは、いま付いている印（【リ】など）を残す
+            if not WHEELCHAIR_MARK_RE.match(marks):
+                kept = WHEELCHAIR_MARK_RE.match(ev.get('summary') or '')
+                if kept:
+                    marks = kept.group(1) + marks
+            body = {
+                'summary': marks + f'【予約】{name}様 ({duration_label(minutes)})',
+                'start': {'dateTime': start_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
+                'end': {'dateTime': end_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
+                'description': merge_description(ev.get('description', ''), fields, stamp),
+            }
+            service.events().patch(calendarId=calendar_id, eventId=event_id, body=body).execute()
+            main = 'updated'
+
+        travel = 'none'
+        if travel_id:
+            tev = _get_event(service, calendar_id, travel_id)
+            if tev is None:
+                travel = 'missing'
+            else:
+                tbody = {
+                    'summary': marks + f'【移動】{name}様のお迎え準備',
+                    'start': {'dateTime': (start_dt - datetime.timedelta(minutes=30)).isoformat(), 'timeZone': 'Asia/Tokyo'},
+                    'end': {'dateTime': start_dt.isoformat(), 'timeZone': 'Asia/Tokyo'},
+                }
+                service.events().patch(calendarId=calendar_id, eventId=travel_id, body=tbody).execute()
+                travel = 'updated'
+        return jsonify({"ok": True, "main": main, "travel": travel})
+    except Exception as e:
+        print(f"Calendar sync error: {e}")
+        return jsonify({"ok": False, "error": "calendar_error"}), 502
