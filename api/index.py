@@ -14,6 +14,7 @@ JST = datetime.timezone(datetime.timedelta(hours=9))
 # 画面側の〇×（src/App.jsx の isRangeBusy）も同じルールで判定しているので、ここを変えるときは必ずそろえる。
 # ただし業務管理アプリの電話受付（allowTightSchedule を送ってくる）は、前の予定のあと1時間でも予約できる。
 # そのときは「予約の時間そのもの（開始〜終了）が予定と重なるか」だけを見る（_is_overlapping。代表判断 2026-11-06）。
+# さらに、業務管理のサーバーが署名した許可（overlapPermit）があれば、承知した予定とは重ねて入れられる（代表判断 2026-11-22）。
 # 電話受付の画面（phoneConflicts）はこちらの判定とそろえてある。
 TRAVEL_BUFFER_BEFORE_MIN = 30   # 予約開始前に確保する移動準備イベントぶんのバッファ
 POST_BOOKING_MARGIN_MIN = 30    # 移動時間とは別に、予定の終了後に追加で空ける余白
@@ -385,7 +386,9 @@ def reserve():
         busy_at_submit = _get_busy_intervals_for_date(service, calendar_id, start_dt.strftime('%Y-%m-%d'))
         if data.get('allowTightSchedule'):
             # 電話受付：前の予定のあと1時間の余白は求めない（電話口で移動が間に合うか確かめて入れるため）
-            conflict = _is_overlapping(busy_at_submit, start_dt, end_dt)
+            # 予定との重なりは、合言葉を通った人が承知した分（署名つきの許可）だけ通す
+            conflict = _is_overlapping(busy_at_submit, start_dt, end_dt) and not _overlap_permitted(
+                data.get('overlapPermit'), busy_at_submit, start_dt, end_dt)
         else:
             conflict = _is_window_busy(busy_at_submit, window_start, end_dt)
         if conflict:
@@ -605,6 +608,31 @@ def _verify_calendar_job(job_text: str, sig: str) -> bool:
         return result.get("valid") is True
     except Exception as e:
         print(f"Calendar job verification failed: {e}")
+        return False
+
+
+def _overlap_permitted(permit, busy_intervals, start, end) -> bool:
+    """重ねて予約してよいか。業務管理のサーバーの署名があり、開始・終了が同じで、
+    いま重なっている予定がすべて「承知した予定」に入っているときだけ True。
+    （確認している間に入った別の予約とは重ねない。同じ許可の使い回しも、入れた予約自体と重なるので通らない）"""
+    if not isinstance(permit, dict):
+        return False
+    job_text, sig = permit.get('job'), permit.get('sig')
+    if not isinstance(job_text, str) or not isinstance(sig, str) or len(job_text.encode('utf-8')) > CALENDAR_JOB_MAX_BYTES:
+        return False
+    if not _verify_calendar_job(job_text, sig):
+        return False
+    try:
+        job = json.loads(job_text)
+        ms = lambda dt: int(dt.timestamp()) * 1000
+        if job.get('op') != 'overlap' or job.get('startMs') != ms(start) or job.get('endMs') != ms(end):
+            return False
+        known = [tuple(pair) for pair in job['known']]
+        for b_start, b_end in busy_intervals:
+            if start < b_end and end > b_start:
+                known.remove((ms(b_start), ms(b_end)))  # 承知していない予定なら ValueError
+        return True
+    except (ValueError, TypeError, KeyError, AttributeError):
         return False
 
 
