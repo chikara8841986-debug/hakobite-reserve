@@ -102,14 +102,20 @@ def fallback_reservation_to_gas(reservation_item: dict):
     with opener.open(req, timeout=8) as gas_res:
         return gas_res.read().decode("utf-8")
 
+_google_credentials = None
+
 def get_service():
+    """認証情報はサーバーのメモリ内で使い回す（毎回作ると、読むたびにトークンを取り直して遅い。期限切れは自動で取り直される）。
+    通信部品は同時利用に弱いので、service は毎回作る。"""
+    global _google_credentials
     try:
-        info = json.loads(os.environ.get("GCP_SERVICE_ACCOUNT_JSON", "{}"))
-        creds = service_account.Credentials.from_service_account_info(
-            info, scopes=['https://www.googleapis.com/auth/calendar']
-        )
+        if _google_credentials is None:
+            info = json.loads(os.environ.get("GCP_SERVICE_ACCOUNT_JSON", "{}"))
+            _google_credentials = service_account.Credentials.from_service_account_info(
+                info, scopes=['https://www.googleapis.com/auth/calendar']
+            )
         # cache_discovery=FalseでVercelのエラーを回避
-        return build('calendar', 'v3', credentials=creds, cache_discovery=False)
+        return build('calendar', 'v3', credentials=_google_credentials, cache_discovery=False)
     except Exception as e:
         print(f"Credentials Error: {e}")
         raise
