@@ -61,7 +61,8 @@ const MIN_BOOKING_MIN = 30;  // いちばん短い所要時間（〇×や開始�
 function isRangeBusy(busy, startMs, minutes) {
   const ws = startMs - TRAVEL_BUFFER_MIN * 60000;
   const we = startMs + minutes * 60000;
-  return busy.some(b => ws < new Date(b.end).getTime() + AFTER_MARGIN_MIN * 60000 && we > new Date(b.start).getTime());
+  // busy の start/end は読み込んだときに数値（ミリ秒）にしてある（予定が増えても描画を遅くしないため）
+  return busy.some(b => ws < b.end + AFTER_MARGIN_MIN * 60000 && we > b.start);
 }
 
 // ============================================================
@@ -833,7 +834,7 @@ function ReservationSystem() {
 
   const refreshBusy = () => {
     setLoading(true);
-    fetch("/api/slots").then(r => r.ok ? r.json() : []).then(d => setBusy(d || [])).catch(() => setBusy([])).finally(() => setLoading(false));
+    fetch("/api/slots").then(r => r.ok ? r.json() : []).then(d => setBusy((d || []).map(b => ({ start: Date.parse(b.start), end: Date.parse(b.end) })))).catch(() => setBusy([])).finally(() => setLoading(false));
   };
 
   useEffect(() => { refreshBusy(); }, []);

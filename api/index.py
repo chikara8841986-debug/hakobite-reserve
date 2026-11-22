@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-import datetime, json, os, re, smtplib, urllib.request
+import datetime, json, os, re, smtplib, urllib.error, urllib.request
 from email.mime.text import MIMEText
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -20,6 +20,7 @@ TRAVEL_BUFFER_BEFORE_MIN = 30   # 予約開始前に確保する移動準備イ�
 POST_BOOKING_MARGIN_MIN = 30    # 移動時間とは別に、予定の終了後に追加で空ける余白
 BUSINESS_HOUR_START = 8         # 代替候補探索・開始時刻の下限
 BUSINESS_HOUR_END = 18          # 代替候補探索・開始時刻の上限
+SLOTS_DAYS_AHEAD = 60           # カレンダーの〇×のために何日先まで読むか
 
 HAKOBITE_RESERVATION_API_URL = os.environ.get(
     "HAKOBITE_RESERVATION_API_URL",
@@ -215,6 +216,22 @@ def get_distance():
         print(f"Distance API Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+def _list_event_times(service, calendar_id, t_min, t_max):
+    """〇×に使う開始・終了だけを読む。予定名や説明欄まで読むと、期間を広げた分だけ遅くなる。
+    Googleは何も指定しないと250件で切るので、続きがあれば読む（外から長い期間を指定されても5ページまで）。"""
+    params = dict(calendarId=calendar_id, timeMin=t_min, timeMax=t_max, singleEvents=True, orderBy='startTime',
+                  maxResults=2500, fields='items(start,end),nextPageToken')
+    items = []
+    for _ in range(5):
+        page = service.events().list(**params).execute()
+        items.extend(page.get('items', []))
+        token = page.get('nextPageToken')
+        if not token:
+            break
+        params['pageToken'] = token
+    return items
+
+
 @app.route('/api/slots', methods=['GET'])
 def get_slots():
     try:
@@ -228,14 +245,9 @@ def get_slots():
         else:
             now = datetime.datetime.now(JST)
             t_min = now.isoformat()
-            t_max = (now + datetime.timedelta(days=60)).isoformat()
+            t_max = (now + datetime.timedelta(days=SLOTS_DAYS_AHEAD)).isoformat()
 
-        events_result = service.events().list(
-            calendarId=os.environ.get("CALENDAR_ID", "chikara8841986@gmail.com"), 
-            timeMin=t_min, timeMax=t_max, singleEvents=True, orderBy='startTime'
-        ).execute()
-        
-        events = events_result.get('items', [])
+        events = _list_event_times(service, os.environ.get("CALENDAR_ID", "chikara8841986@gmail.com"), t_min, t_max)
         
         busy_slots = []
         for event in events:
@@ -342,6 +354,17 @@ def get_repeaters():
             resp.headers[k] = v
         return resp
     except Exception as e:
+        if isinstance(e, urllib.error.HTTPError) and e.code == 429:
+            try:
+                seconds = int(json.loads(e.read().decode('utf-8')).get('retryAfterSec') or 0)
+            except Exception:
+                seconds = 0
+            minutes = max(1, (seconds + 59) // 60)
+            wait = f'約{minutes}分後' if minutes <= 60 else '明日'
+            resp = jsonify({"error": f"暗証番号の間違いが続いたため止めています。{wait}にもう一度お試しください。", "repeaters": []})
+            for k, v in _cors_headers().items():
+                resp.headers[k] = v
+            return resp, 429
         print(f"Repeaters API Error: {e}")
         resp = jsonify({"error": "暗証番号が違うか、リピーター情報を取得できませんでした。", "repeaters": []})
         for k, v in _cors_headers().items():
