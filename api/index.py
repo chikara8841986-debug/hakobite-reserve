@@ -20,7 +20,7 @@ TRAVEL_BUFFER_BEFORE_MIN = 30   # 予約開始前に確保する移動準備イ�
 POST_BOOKING_MARGIN_MIN = 30    # 移動時間とは別に、予定の終了後に追加で空ける余白
 BUSINESS_HOUR_START = 8         # 代替候補探索・開始時刻の下限
 BUSINESS_HOUR_END = 18          # 代替候補探索・開始時刻の上限
-SLOTS_DAYS_AHEAD = 60           # カレンダーの〇×のために何日先まで読むか
+SLOTS_DAYS_AHEAD = 365          # カレンダーの〇×のために何日先まで読むか
 
 HAKOBITE_RESERVATION_API_URL = os.environ.get(
     "HAKOBITE_RESERVATION_API_URL",
