@@ -14,11 +14,11 @@ const FARE = {
   pickupFee: 100,
   welfareFee: 1000, careFee: 500,
   waitingFeePer110Sec: 100,
-  wheelchair: { normal: 500, reclining: 700 }
+  // 車いすレンタル代は廃止（代表判断 2026-11-24。ホームページでも「レンタル料は無料」）
 };
 function calculateFare(distKm, opts = {}) {
   if (distKm <= 0) return null;
-  const { needsCare = false, wheelchairType = "none", roundTrip = false, waitingMinutes = 0 } = opts;
+  const { needsCare = false, roundTrip = false, waitingMinutes = 0 } = opts;
   const increments = Math.ceil(distKm / FARE.meterDistance);
   const meterIncrementFare = increments * FARE.meterFare;
   const tripMultiplier = roundTrip ? 2 : 1;
@@ -26,14 +26,11 @@ function calculateFare(distKm, opts = {}) {
   const meterFare = meterIncrementFare * tripMultiplier;
   const pickupFee = FARE.pickupFee;
   const cf = needsCare ? FARE.careFee : 0;
-  let wf = 0;
-  if (wheelchairType === "normal") wf = FARE.wheelchair.normal;
-  if (wheelchairType === "reclining") wf = FARE.wheelchair.reclining;
   const waitingFee = waitingMinutes > 0 ? Math.floor((waitingMinutes * 60) / 110) * FARE.waitingFeePer110Sec : 0;
-  const total = baseFare + meterFare + pickupFee + FARE.welfareFee + cf + wf + waitingFee;
+  const total = baseFare + meterFare + pickupFee + FARE.welfareFee + cf + waitingFee;
   return {
     baseFare, meterFare, increments, roundTrip,
-    pickupFee, welfareFee: FARE.welfareFee, careFee: cf, wheelchairFee: wf,
+    pickupFee, welfareFee: FARE.welfareFee, careFee: cf,
     waitingFee, waitingMinutes,
     total
   };
@@ -273,7 +270,6 @@ function PriceCalculator() {
   const navigate = useNavigate();
   const [km, setKm] = useState("");
   const [care, setCare] = useState(false);
-  const [wc, setWc] = useState("none");
   const [roundTrip, setRoundTrip] = useState(false);
   const [waitingMinutes, setWaitingMinutes] = useState("0");
   const [res, setRes] = useState(null);
@@ -285,7 +281,7 @@ function PriceCalculator() {
   useEffect(() => {
     setRes(null);
     setCalcError("");
-  }, [km, care, wc, roundTrip, waitingMinutes]);
+  }, [km, care, roundTrip, waitingMinutes]);
 
   const calc = () => {
     const d = parseFloat(km);
@@ -294,7 +290,7 @@ function PriceCalculator() {
       return;
     }
     setCalcError("");
-    setRes(calculateFare(d, { needsCare: care, wheelchairType: wc, roundTrip, waitingMinutes: parseInt(waitingMinutes, 10) || 0 }));
+    setRes(calculateFare(d, { needsCare: care, roundTrip, waitingMinutes: parseInt(waitingMinutes, 10) || 0 }));
   };
 
   const openMap = () => {
@@ -354,15 +350,6 @@ function PriceCalculator() {
             ))}
           </select>
         </FF>
-        <div style={{ fontSize: 12, fontWeight: 600, color: C.textMid, margin: "12px 0 6px" }}>🦽 車椅子レンタル（日をまたぐ場合）</div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-          {[{ v: "none", l: "なし", s: "" }, { v: "normal", l: "普通型", s: "＋500円" }, { v: "reclining", l: "リクライニング", s: "＋700円" }].map(o => (
-            <button key={o.v} type="button" onClick={() => setWc(o.v)} style={{ flex: 1, padding: "10px 4px", background: wc === o.v ? C.greenBg : C.cream, border: `2px solid ${wc === o.v ? C.green : C.borderLight}`, borderRadius: 8, cursor: "pointer", textAlign: "center", fontSize: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: wc === o.v ? C.green : C.textMid }}>{o.l}</div>
-              {o.s && <div style={{ fontSize: 10, color: C.textLight, marginTop: 1 }}>{o.s}</div>}
-            </button>
-          ))}
-        </div>
         <button type="button" onClick={calc} style={bGreen}>🚕 料金を計算する</button>
         {res && (
           <div style={{ marginTop: 14, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}`, animation: "fadeIn 0.3s ease-out" }}>
@@ -378,7 +365,6 @@ function PriceCalculator() {
               <BR label="福祉車両代" value={res.welfareFee} bg={C.orangeBg} color={C.orange} />
               {res.careFee > 0 && <BR label="身体介助等" value={res.careFee} bg={C.redBg} color={C.red} />}
               {res.waitingFee > 0 && <BR label={`待機料金（${res.waitingMinutes}分）`} value={res.waitingFee} bg={C.pinkBg} color={C.pink} />}
-              {res.wheelchairFee > 0 && <BR label={`車椅子（${wc === "reclining" ? "リクライニング" : "普通型"}）`} value={res.wheelchairFee} bg={C.purpleBg} color={C.purple} note="日またぎ" />}
               <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 10px", marginTop: 6, borderTop: `2px solid ${C.border}` }}>
                 <span style={{ fontSize: 13, fontWeight: 700 }}>合計</span><span style={{ fontSize: 18, fontWeight: 800, color: C.green }}>¥{fmt(res.total)}</span>
               </div>
